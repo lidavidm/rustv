@@ -2,8 +2,8 @@ use isa;
 use binary::{Binary};
 use memory::{Memory};
 
-pub struct Simulator<'a> {
-    binary: Binary<'a>,
+pub struct Simulator {
+    binary: Binary,
     num_cores: usize,
     memory: Memory,
 }
@@ -17,8 +17,8 @@ struct RegisterFile {
     registers: [u32; 32],
 }
 
-impl<'a> Simulator<'a> {
-    pub fn new(num_cores: usize, binary: Binary<'a>) -> Simulator<'a> {
+impl Simulator {
+    pub fn new(num_cores: usize, binary: Binary) -> Simulator {
         Simulator {
             binary: binary,
             num_cores: num_cores,
