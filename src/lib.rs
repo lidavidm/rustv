@@ -10,7 +10,10 @@ fn it_works() {
     use std::path::Path;
     println!("Test");
     match binary::Binary::new_from_hex_file(Path::new("../riscv/kernel.hex")) {
-        Ok(_) => println!("Ok"),
+        Ok(b) => {
+            let mut simulator = simulator::Simulator::new(1, b);
+            simulator.run();
+        },
         Err(err) => println!("Error: {:?}", err),
     }
 }

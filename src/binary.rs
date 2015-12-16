@@ -7,7 +7,7 @@ use std::path::Path;
 use std::str;
 
 pub struct Binary {
-    words: Vec<u32>,
+    pub words: Vec<u32>,
 }
 
 #[derive(Debug)]

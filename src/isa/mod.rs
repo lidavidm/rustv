@@ -1,6 +1,7 @@
 pub mod opcodes;
+pub mod funct3;
 
-enum Register {
+pub enum Register {
     X0 = 0,
     X1 = 1,
     X2 = 2,
@@ -13,6 +14,12 @@ enum Register {
     X9 = 9,
     X10 = 10,
     X11 = 11,
+}
+
+impl Register {
+    pub fn as_num(self) -> usize {
+        self as usize
+    }
 }
 
 pub struct Instruction {
@@ -28,5 +35,9 @@ impl Instruction {
 
     pub fn opcode(&self) -> u32 {
         self.word & 0x7F
+    }
+
+    pub fn funct3(&self) -> u32 {
+        (self.word >> 12) & 0x3
     }
 }
