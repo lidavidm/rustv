@@ -49,6 +49,7 @@ impl Simulator {
 
     pub fn run(&mut self) {
         let mut cores = vec![Core { pc: 0x10000, registers: RegisterFile::new() }; self.num_cores];
+        cores[0].registers.write_word(isa::Register::X3, 0x10860);
         loop {
             for core in cores.iter_mut() {
                 self.step_core(core);
@@ -67,7 +68,7 @@ impl Simulator {
                         let imm = inst.i_imm();
                         let src: i32 = core.registers.read_word(inst.rs1()) as i32;
                         core.registers.write_word(inst.rd(), src.wrapping_add(imm) as u32);
-                        println!("After ADDI: {:?} = {}", inst.rd(), core.registers.read_word(inst.rd()) as i32);
+                        println!("After ADDI: {:?} = 0x{:X}", inst.rd(), core.registers.read_word(inst.rd()) as i32);
                     }
                     _ => {
                         panic!("Invalid integer-immediate funct3code: 0x{:x}", inst.funct3());
@@ -75,8 +76,15 @@ impl Simulator {
                 },
                 isa::opcodes::LOAD => match inst.funct3() {
                      isa::funct3::LW => {
-                        println!("LW");
-                    }
+                         let imm = inst.i_imm();
+                         let base = core.registers.read_word(inst.rs1());
+                         let address = ((base as i32) + imm) as usize;
+                         if let Some(value) = self.memory.read_word(address) {
+                             core.registers.write_word(inst.rd(), value);
+                             println!("Load to {:?}: 0x{:X}", inst.rd(), value);
+                         }
+                         // TODO: trap
+                     }
                     _ => {
                         panic!("Invalid load funct3code: 0x{:x}", inst.funct3());
                     }
