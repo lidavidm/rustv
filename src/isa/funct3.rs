@@ -3,8 +3,7 @@ pub const SLLI: u32 = 0x1;
 pub const SLTI: u32 = 0x2;
 pub const SLTIU: u32 = 0x3;
 pub const XORI: u32 = 0x4;
-pub const SRLI: u32 = 0x5;
-pub const SRAI: u32 = 0x5;
+pub const SRLI_SRAI: u32 = 0x5;
 pub const ORI: u32 = 0x6;
 pub const ANDI: u32 = 0x7;
 

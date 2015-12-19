@@ -110,6 +110,10 @@ impl Instruction {
         (self.word >> 25) & 0x7F
     }
 
+    pub fn shamt(&self) -> u32 {
+        (self.word >> 20) & 0x1F
+    }
+
     pub fn rs1(&self) -> Register {
         Register::from_num((self.word >> 15) & 0x1F)
     }

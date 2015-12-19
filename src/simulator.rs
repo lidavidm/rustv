@@ -112,14 +112,63 @@ impl Simulator {
                 isa::opcodes::BRANCH => {
                     
                 },
-                isa::opcodes::INTEGER_IMMEDIATE => match inst.funct3() {
-                    isa::funct3::ADDI => {
-                        let imm = inst.i_imm();
-                        let src: i32 = core.registers.read_word(inst.rs1()) as i32;
-                        core.registers.write_word(inst.rd(), src.wrapping_add(imm) as u32);
-                    },
-                    _ => {
-                        panic!("Invalid integer-immediate funct3code: 0x{:x}", inst.funct3());
+                isa::opcodes::INTEGER_IMMEDIATE => {
+                    let imm = inst.i_imm();
+                    let src: i32 = core.registers.read_word(inst.rs1()) as i32;
+                    if let Some(value) = match inst.funct3() {
+                        isa::funct3::ADDI => {
+                            Some(src.wrapping_add(imm) as u32)
+                        },
+                        isa::funct3::SLLI => {
+                            Some((src << inst.shamt()) as u32)
+                        },
+                        isa::funct3::SLTI => {
+                            if src < imm {
+                                Some(1)
+                            }
+                            else {
+                                Some(0)
+                            }
+                        },
+                        isa::funct3::SLTIU => {
+                            if (src as u32) < (imm as u32) {
+                                Some(1)
+                            }
+                            else {
+                                Some(0)
+                            }
+                        },
+                        isa::funct3::XORI => {
+                            Some((src ^ imm) as u32)
+                        },
+                        isa::funct3::SRLI_SRAI => {
+                            match inst.funct7() {
+                                isa::funct7::SRLI => Some(((src as u32) >> inst.shamt()) as u32),
+                                isa::funct7::SRAI => Some((src >> inst.shamt()) as u32),
+                                _ => {
+                                    self.trap(core, Trap::IllegalInstruction {
+                                        address: pc,
+                                        instruction: inst,
+                                    });
+                                    None
+                                }
+                            }
+                        },
+                        isa::funct3::ORI => {
+                            Some((src | imm) as u32)
+                        },
+                        isa::funct3::ANDI => {
+                            Some((src & imm) as u32)
+                        },
+                        _ => {
+                            self.trap(core, Trap::IllegalInstruction {
+                                address: pc,
+                                instruction: inst,
+                            });
+                            None
+                        }
+                    } {
+                        core.registers.write_word(inst.rd(), value);
                     }
                 },
                 isa::opcodes::INTEGER_REGISTER => {
@@ -199,7 +248,6 @@ impl Simulator {
                          let address = ((base as i32) + imm) as usize;
                          if let Some(value) = self.memory.read_word(address) {
                              core.registers.write_word(inst.rd(), value);
-                             println!("Load to {:?}: 0x{:X}", inst.rd(), value);
                          }
                          else {
                              self.trap(core, Trap::IllegalRead {
@@ -220,7 +268,6 @@ impl Simulator {
                          let val = core.registers.read_word(inst.rs2());
                          let address = ((base as i32) + imm) as usize;
                          self.memory.write_word(address, val);
-                         println!("Store to 0x{:X}: 0x{:X}", address, val);
                     }
                     _ => {
                         panic!("Invalid store funct3code: 0x{:x}", inst.funct3());
