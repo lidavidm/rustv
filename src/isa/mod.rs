@@ -1,5 +1,6 @@
 pub mod opcodes;
 pub mod funct3;
+pub mod funct7;
 
 #[derive(Debug, PartialEq)]
 pub enum Register {
@@ -81,6 +82,7 @@ impl Register {
     }
 }
 
+#[derive(Copy, Clone, Debug)]
 pub struct Instruction {
     word: u32,
 }
@@ -104,11 +106,26 @@ impl Instruction {
         (self.word >> 12) & 0x3
     }
 
+    pub fn funct7(&self) -> u32 {
+        (self.word >> 25) & 0x7F
+    }
+
     pub fn rs1(&self) -> Register {
         Register::from_num((self.word >> 15) & 0x1F)
     }
 
+    pub fn rs2(&self) -> Register {
+        Register::from_num((self.word >> 20) & 0x1F)
+    }
+
     pub fn i_imm(&self) -> i32 {
         (self.word as i32) >> 20
+    }
+
+    pub fn s_imm(&self) -> i32 {
+        let word = self.word as i32;
+        let low = (word >> 7) & 0x1F;
+        let high = (word >> 25) & 0x7F;
+        (high << 7) | low
     }
 }

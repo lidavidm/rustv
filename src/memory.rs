@@ -22,6 +22,17 @@ impl Memory {
         self.memory.get(address / 4).map(Clone::clone)
     }
 
+    pub fn write_word(&mut self, address: usize, value: u32) -> Option<()> {
+        let address = address / 4;
+        if address >= self.memory.len() {
+            None
+        }
+        else {
+            self.memory[address] = value;
+            Some(())
+        }
+    }
+
     pub fn read_instruction(&self, pc: usize) -> Option<Instruction> {
         self.memory.get(pc / 4).map(Clone::clone).map(Instruction::new)
     }

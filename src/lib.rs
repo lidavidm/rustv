@@ -1,9 +1,8 @@
-#![feature(as_slice)]
-mod isa;
-mod binary;
-mod memory;
-mod cache;
-mod simulator;
+pub mod isa;
+pub mod binary;
+pub mod memory;
+pub mod cache;
+pub mod simulator;
 
 #[test]
 fn it_works() {
