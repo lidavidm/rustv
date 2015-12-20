@@ -107,15 +107,15 @@ impl Simulator {
                         core.running = false;
                     }
                     else {
-                        let target = (((pc as i32) + inst.i_imm()) & 0xFFFFFFFE) as usize;
-                        core.registers.write_word(inst.rd(), pc + 4);
+                        let target = (((pc as i32) + inst.i_imm()) as usize) & 0xFFFFFFFE;
+                        core.registers.write_word(inst.rd(), (pc + 4) as u32);
                         core.pc = target;
                         return;
                     }
                 },
                 isa::opcodes::JAL => {
                     let target = ((pc as i32) + inst.uj_imm()) as usize;
-                    core.registers.write_word(inst.rd(), pc + 4);
+                    core.registers.write_word(inst.rd(), (pc + 4) as u32);
                     core.pc = target;
                     return;
                 }
