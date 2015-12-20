@@ -105,9 +105,16 @@ impl Simulator {
                         // ret
                         core.running = false;
                     }
+                    else {
+                        let target = ((pc as i32) + inst.i_imm()) as usize;
+                        core.registers.write_word(inst.rd(), pc + 4);
+                        core.pc = target;
+                    }
                 },
                 isa::opcodes::JAL => {
-                    
+                    let target = ((pc as i32) + inst.uj_imm()) as usize;
+                    core.registers.write_word(inst.rd(), pc + 4);
+                    core.pc = target;
                 }
                 isa::opcodes::BRANCH => {
                     

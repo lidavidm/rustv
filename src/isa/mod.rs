@@ -127,9 +127,18 @@ impl Instruction {
     }
 
     pub fn s_imm(&self) -> i32 {
-        let word = self.word as i32;
-        let low = (word >> 7) & 0x1F;
-        let high = (word >> 25) & 0x7F;
+        let low = (self.word >> 7) & 0x1F;
+        let high = ((self.word as i32) >> 25) & 0x7F;
         (high << 7) | low
+    }
+
+    pub fn uj_imm(&self) -> i32 {
+        // Want zero-extension
+        let low1 = (self.word >> 21) & 0x3FF;
+        let low11 = (self.word >> 19) & 0x1;
+        let low12 = (self.word >> 12) & 0xFF;
+        // Want sign-extension
+        let low20 = ((self.word as i32) >> 30) & 0x1;
+        (low20 << 20) | (low12 << 12) | (low11 << 11) | (low1 << 1)
     }
 }
