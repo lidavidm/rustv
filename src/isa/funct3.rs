@@ -16,6 +16,13 @@ pub const SRL_SRA: u32 = 0x5;
 pub const OR: u32 = 0x6;
 pub const AND: u32 = 0x7;
 
+pub const BEQ: u32 = 0b000;
+pub const BNE: u32 = 0b001;
+pub const BLT: u32 = 0b100;
+pub const BGE: u32 = 0b101;
+pub const BLTU: u32 = 0b110;
+pub const BGEU: u32 = 0b111;
+
 pub const LW: u32 = 0x2;
 
 pub const SW: u32 = 0x2;

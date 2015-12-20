@@ -120,7 +120,27 @@ impl Simulator {
                     return;
                 }
                 isa::opcodes::BRANCH => {
-                    
+                    let target = ((pc as i32) + inst.sb_imm()) as usize;
+                    let rs1 = core.registers.read_word(inst.rs1());
+                    let rs2 = core.registers.read_word(inst.rs2());
+                    if match inst.funct3() {
+                        isa::funct3::BEQ => rs1 == rs2,
+                        isa::funct3::BNE => rs1 != rs2,
+                        isa::funct3::BLT => (rs1 as i32) < (rs2 as i32),
+                        isa::funct3::BGE => (rs1 as i32) > (rs2 as i32),
+                        isa::funct3::BLTU => rs1 < rs2,
+                        isa::funct3::BGEU => rs1 > rs2,
+                        _ => {
+                            self.trap(core, Trap::IllegalInstruction {
+                                address: pc,
+                                instruction: inst,
+                            });
+                            false
+                        }
+                    } {
+                        core.pc = target;
+                        return;
+                    }
                 },
                 isa::opcodes::INTEGER_IMMEDIATE => {
                     let imm = inst.i_imm();
