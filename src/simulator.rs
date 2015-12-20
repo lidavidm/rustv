@@ -9,13 +9,13 @@ pub struct Simulator {
 
 #[derive(Clone)]
 struct RegisterFile {
-    registers: [u32; 32],
+    registers: [isa::Word; 32],
 }
 
 #[derive(Clone)]
 struct Core {
     // TODO: directly encode PC as u32, as architecturally specified
-    pc: usize,
+    pc: isa::Address,
     registers: RegisterFile,
     running: bool,
 }
@@ -23,19 +23,19 @@ struct Core {
 #[derive(Debug)]
 enum Trap {
     IllegalInstruction {
-        address: usize,
+        address: isa::Address,
         instruction: isa::Instruction,
     },
     IllegalRead {
-        address: usize,
+        address: isa::Address,
         instruction: isa::Instruction,
         memory_address: usize,
     },
     IllegalWrite {
-        address: usize,
+        address: isa::Address,
         instruction: isa::Instruction,
-        memory_address: usize,
-        memory_value: u32,
+        memory_address: isa::Address,
+        memory_value: isa::Word,
     }
 }
 
@@ -46,14 +46,14 @@ impl RegisterFile {
         }
     }
 
-    fn write_word<T: Into<isa::Register>>(&mut self, reg: T, value: u32) {
+    fn write_word<T: Into<isa::Register>>(&mut self, reg: T, value: isa::Word) {
         // TODO: should be safe to use unchecked index
         let reg = reg.into();
         if reg == isa::Register::X0 { return; }
         self.registers[reg.as_num()] = value;
     }
 
-    fn read_word<T: Into<isa::Register>>(&mut self, reg: T) -> u32 {
+    fn read_word<T: Into<isa::Register>>(&mut self, reg: T) -> isa::Word {
         self.registers[reg.into().as_num()]
     }
 }
@@ -74,7 +74,7 @@ impl Simulator {
             registers: RegisterFile::new(),
             running: true,
         };
-        let mut cores = vec![base_core ; self.num_cores];
+        let mut cores = vec![base_core; self.num_cores];
         // hardcode GP
         cores[0].registers.write_word(isa::Register::X3, 0x10860);
         // hardcode SP
@@ -144,13 +144,13 @@ impl Simulator {
                 },
                 isa::opcodes::INTEGER_IMMEDIATE => {
                     let imm = inst.i_imm();
-                    let src: i32 = core.registers.read_word(inst.rs1()) as i32;
+                    let src = core.registers.read_word(inst.rs1()) as isa::SignedWord;
                     if let Some(value) = match inst.funct3() {
                         isa::funct3::ADDI => {
-                            Some(src.wrapping_add(imm) as u32)
+                            Some(src.wrapping_add(imm) as isa::Word)
                         },
                         isa::funct3::SLLI => {
-                            Some((src << inst.shamt()) as u32)
+                            Some((src << inst.shamt()) as isa::Word)
                         },
                         isa::funct3::SLTI => {
                             if src < imm {

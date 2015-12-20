@@ -1,7 +1,6 @@
 pub mod isa;
 pub mod binary;
 pub mod memory;
-pub mod cache;
 pub mod simulator;
 
 #[test]

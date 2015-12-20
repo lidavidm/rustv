@@ -1,8 +1,6 @@
 use isa::{self, Instruction};
 use binary::{Binary};
 
-pub type Address = usize;
-
 pub struct Memory {
     memory: Vec<u32>,
 }
@@ -28,7 +26,7 @@ pub struct Cache {
 // TODO: refactor impls into a MemoryController(?) trait
 
 impl Memory {
-    pub fn new(size: Address, binary: Binary) -> Memory {
+    pub fn new(size: isa::Address, binary: Binary) -> Memory {
         let mut memory = binary.words.clone();
         if size > memory.len() {
             let remainder = size - memory.len();
@@ -39,12 +37,12 @@ impl Memory {
         }
     }
 
-    pub fn read_word(&self, address: Address) -> Option<isa::Word> {
+    pub fn read_word(&self, address: isa::Address) -> Option<isa::Word> {
         // memory is word-addressed but addresses are byte-addressed
         self.memory.get(address / 4).map(Clone::clone)
     }
 
-    pub fn write_word(&mut self, address: Address, value: isa::Word) -> Option<()> {
+    pub fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Option<()> {
         let address = address / 4;
         if address >= self.memory.len() {
             None
@@ -55,7 +53,7 @@ impl Memory {
         }
     }
 
-    pub fn read_instruction(&self, pc: Address) -> Option<Instruction> {
+    pub fn read_instruction(&self, pc: isa::Address) -> Option<Instruction> {
         self.memory.get(pc / 4).map(Clone::clone).map(Instruction::new)
     }
 }
@@ -74,15 +72,15 @@ impl Cache {
         }
     }
 
-    fn read_word(&self, address: Address) -> Option<isa::Word> {
+    fn read_word(&self, address: isa::Address) -> Option<isa::Word> {
         None
     }
 
-    fn write_word(&mut self, address: Address, value: isa::Word) -> Option<()> {
+    fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Option<()> {
         None
     }
 
-    fn invalidate(&mut self, address: Address) {
+    fn invalidate(&mut self, address: isa::Address) {
         
     }
 }

@@ -3,6 +3,8 @@ pub mod funct3;
 pub mod funct7;
 
 pub type Word = u32;
+pub type SignedWord = i32;
+pub type Address = usize;
 
 #[derive(Debug, PartialEq)]
 pub enum Register {
