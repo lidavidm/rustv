@@ -2,6 +2,8 @@ pub mod opcodes;
 pub mod funct3;
 pub mod funct7;
 
+pub type Word = u32;
+
 #[derive(Debug, PartialEq)]
 pub enum Register {
     X0 = 0,
@@ -84,6 +86,8 @@ impl Register {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Instruction {
+    // TODO: rename word to something correct - instructions are not always a
+    // word
     word: u32,
 }
 
