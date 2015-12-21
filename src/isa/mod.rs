@@ -146,7 +146,7 @@ impl Instruction {
         let low11 = (self.word >> 20) & 0x1;
         let low12 = (self.word >> 12) & 0xFF;
         // Want sign-extension
-        let low20 = (((self.word as SignedWord) >> 30) & 0x1) as Word;
+        let low20 = ((self.word as SignedWord) >> 30) as Word;
         ((low20 << 20) | (low12 << 12) | (low11 << 11) | (low1 << 1)) as SignedWord
     }
 
@@ -154,7 +154,7 @@ impl Instruction {
         let low1 = (self.word >> 8) & 0xF;
         let low5 = (self.word >> 25) & 0x3F;
         let low11 = (self.word >> 7) & 0x1;
-        let low12 = (((self.word as SignedWord) >> 31) & 0x1) as Word;
+        let low12 = ((self.word as SignedWord) >> 31) as Word;
         ((low12 << 12) | (low11 << 11) | (low5 << 5) | (low1 << 1)) as SignedWord
     }
 }
