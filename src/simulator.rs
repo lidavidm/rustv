@@ -69,7 +69,7 @@ impl Simulator {
 
     pub fn run(&mut self) {
         let base_core = Core {
-            pc: 0x10000,
+            pc: 0x1002C,
             registers: RegisterFile::new(),
             running: true,
         };
@@ -273,11 +273,18 @@ impl Simulator {
                         panic!("Invalid store funct3code: 0x{:x}", inst.funct3());
                     }
                 },
-                isa::opcodes::SYSTEM => {
-                    
+                isa::opcodes::SYSTEM => match inst.i_imm() {
+                    0x0 => {
+                        // System call
+                        println!("System call {}:", core.registers.read_word(isa::Register::X10));
+                        println!("Argument {:X}:", core.registers.read_word(isa::Register::X11));
+                    }
+                    _ => {
+                        
+                    }
                 },
                 _ => {
-                    panic!("Invalid opcode: 0x{:02X}", inst.opcode());
+                    panic!("Invalid opcode: 0x{:02X} at PC 0x{:X}", inst.opcode(), pc);
                 }
             }
         }
