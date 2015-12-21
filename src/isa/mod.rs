@@ -2,6 +2,12 @@ pub mod opcodes;
 pub mod funct3;
 pub mod funct7;
 
+pub type Word = u32;
+pub type SignedWord = i32;
+
+// TODO: directly encode PC as u32, as architecturally specified
+pub type Address = usize;
+
 #[derive(Debug, PartialEq)]
 pub enum Register {
     X0 = 0,
@@ -84,6 +90,8 @@ impl Register {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Instruction {
+    // TODO: rename word to something correct - instructions are not always a
+    // word
     word: u32,
 }
 
@@ -122,14 +130,31 @@ impl Instruction {
         Register::from_num((self.word >> 20) & 0x1F)
     }
 
-    pub fn i_imm(&self) -> i32 {
-        (self.word as i32) >> 20
+    pub fn i_imm(&self) -> SignedWord {
+        (self.word as SignedWord) >> 20
     }
 
-    pub fn s_imm(&self) -> i32 {
-        let word = self.word as i32;
-        let low = (word >> 7) & 0x1F;
-        let high = (word >> 25) & 0x7F;
-        (high << 7) | low
+    pub fn s_imm(&self) -> SignedWord {
+        let low = (self.word >> 7) & 0x1F;
+        let high = (((self.word as SignedWord) >> 25) & 0x7F) as Word;
+        ((high << 7) | low) as SignedWord
+    }
+
+    pub fn uj_imm(&self) -> SignedWord {
+        // Want zero-extension
+        let low1 = (self.word >> 21) & 0x3FF;
+        let low11 = (self.word >> 20) & 0x1;
+        let low12 = (self.word >> 12) & 0xFF;
+        // Want sign-extension
+        let low20 = (((self.word as SignedWord) >> 30) & 0x1) as Word;
+        ((low20 << 20) | (low12 << 12) | (low11 << 11) | (low1 << 1)) as SignedWord
+    }
+
+    pub fn sb_imm(&self) -> SignedWord {
+        let low1 = (self.word >> 8) & 0xF;
+        let low5 = (self.word >> 25) & 0x3F;
+        let low11 = (self.word >> 7) & 0x1;
+        let low12 = (((self.word as SignedWord) >> 31) & 0x1) as Word;
+        ((low12 << 12) | (low11 << 11) | (low5 << 5) | (low1 << 1)) as SignedWord
     }
 }
