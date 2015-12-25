@@ -277,8 +277,9 @@ impl Simulator {
                         let base = core.registers.read_word(inst.rs1());
                         let address = ((base as isa::SignedWord) + imm) as isa::Address;
                         match self.memory.read_word(address) {
-                            Ok(value) => core.registers.write_word(inst.rd(), value),
-                            Err(MemoryError::CacheMiss) => return,
+                            Ok(value) =>
+                                core.registers.write_word(inst.rd(), value),
+                            Err(MemoryError::CacheMiss {..}) => return,
                             Err(MemoryError::InvalidAddress) => {
                                 self.trap(core, Trap::IllegalRead {
                                     address: pc,
@@ -300,7 +301,7 @@ impl Simulator {
                          let address = ((base as isa::SignedWord) + imm) as isa::Address;
                          match self.memory.write_word(address, val) {
                              Ok(()) => (),
-                             Err(MemoryError::CacheMiss) => return,
+                             Err(MemoryError::CacheMiss {..}) => return,
                              Err(MemoryError::InvalidAddress) => {
                                  self.trap(core, Trap::IllegalWrite {
                                      address: pc,
@@ -319,7 +320,7 @@ impl Simulator {
                     0x0 => {
                         // System call
                         println!("System call {}:", core.registers.read_word(isa::Register::X10));
-                        let address = core.registers.read_word(isa::Register::X11) as usize;
+                        let address = core.registers.read_word(isa::Register::X11);
                         println!("Argument {:X}: {:?}", address, self.memory.read_word(address));
                     }
                     _ => {

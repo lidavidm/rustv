@@ -9,8 +9,7 @@ pub type SignedHalfWord = i16;
 pub type Byte = u8;
 pub type SignedByte = i8;
 
-// TODO: directly encode PC as u32, as architecturally specified
-pub type Address = usize;
+pub type Address = u32;
 
 #[derive(Debug, PartialEq)]
 pub enum Register {

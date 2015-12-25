@@ -4,7 +4,9 @@ use binary::{Binary};
 #[derive(Debug)]
 pub enum MemoryError {
     InvalidAddress,
-    CacheMiss,
+    CacheMiss {
+        stall_cycles: u32,
+    },
 }
 
 pub type Result<T> = ::std::result::Result<T, MemoryError>;
@@ -51,6 +53,7 @@ pub struct Cache {
 impl Memory {
     pub fn new(size: isa::Address, binary: Binary) -> Memory {
         let mut memory = binary.words.clone();
+        let size = size as usize;
         if size > memory.len() {
             let remainder = size - memory.len();
             memory.reserve(remainder);
@@ -61,7 +64,9 @@ impl Memory {
     }
 
     pub fn read_instruction(&self, pc: isa::Address) -> Option<Instruction> {
-        self.memory.get(pc / 4).map(Clone::clone).map(Instruction::new)
+        self.memory.get((pc / 4) as usize)
+            .map(Clone::clone)
+            .map(Instruction::new)
     }
 }
 
@@ -70,11 +75,14 @@ impl MemoryInterface for Memory {
 
     fn read_word(&self, address: isa::Address) -> Result<isa::Word> {
         // memory is word-addressed but addresses are byte-addressed
-        self.memory.get(address / 4).map(Clone::clone).ok_or(MemoryError::InvalidAddress)
+        self.memory.get((address / 4) as usize)
+            .map(Clone::clone)
+            .ok_or(MemoryError::InvalidAddress)
     }
 
-    fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Result<()> {
-        let address = address / 4;
+    fn write_word(&mut self, address: isa::Address, value: isa::Word)
+                  -> Result<()> {
+        let address = (address / 4) as usize;
         if address >= self.memory.len() || address <= 0 {
             Err(MemoryError::InvalidAddress)
         }
@@ -99,6 +107,23 @@ impl Cache {
         }
     }
 
+    fn parse_address(&self, address: isa::Address) -> (u32, u32, u32) {
+        // TODO: use constant in ISA module for word->byte conversion
+        let offset_mask = (self.block_words * 4 - 1) as u32;
+        let offset = address & offset_mask;
+        let index_mask = (self.num_sets - 1) as u32;
+        let index_shift = 32 - (self.block_words * 4).leading_zeros();
+        let index = (address >> index_shift) & index_mask;
+        let tag_shift = index_shift + (32 - self.num_sets.leading_zeros());
+        let tag = address >> tag_shift;
+
+        (tag, index, offset)
+    }
+
+    fn prefetch(&mut self, address: isa::Address) {
+
+    }
+
     fn invalidate(&mut self, address: isa::Address) {
 
     }
@@ -111,7 +136,8 @@ impl MemoryInterface for Cache {
         Err(MemoryError::InvalidAddress)
     }
 
-    fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Result<()> {
+    fn write_word(&mut self, address: isa::Address, value: isa::Word)
+                  -> Result<()> {
         Err(MemoryError::InvalidAddress)
     }
 
