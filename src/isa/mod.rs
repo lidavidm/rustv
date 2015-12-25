@@ -4,6 +4,10 @@ pub mod funct7;
 
 pub type Word = u32;
 pub type SignedWord = i32;
+pub type HalfWord = u16;
+pub type SignedHalfWord = i16;
+pub type Byte = u8;
+pub type SignedByte = i8;
 
 // TODO: directly encode PC as u32, as architecturally specified
 pub type Address = usize;

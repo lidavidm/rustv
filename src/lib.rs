@@ -1,3 +1,4 @@
+#![feature(associated_consts)]
 pub mod isa;
 pub mod binary;
 pub mod memory;

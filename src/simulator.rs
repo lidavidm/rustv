@@ -1,6 +1,6 @@
 use isa;
 use binary::{Binary};
-use memory::{Memory};
+use memory::{MemoryInterface, Memory, MemoryError};
 
 pub struct Simulator {
     num_cores: usize,
@@ -272,21 +272,22 @@ impl Simulator {
                     }
                 },
                 isa::opcodes::LOAD => match inst.funct3() {
-                     isa::funct3::LW => {
-                         let imm = inst.i_imm();
-                         let base = core.registers.read_word(inst.rs1());
-                         let address = ((base as isa::SignedWord) + imm) as isa::Address;
-                         if let Some(value) = self.memory.read_word(address) {
-                             core.registers.write_word(inst.rd(), value);
-                         }
-                         else {
-                             self.trap(core, Trap::IllegalRead {
-                                 address: pc,
-                                 instruction: inst,
-                                 memory_address: address,
-                             });
-                         }
-                     }
+                    isa::funct3::LW => {
+                        let imm = inst.i_imm();
+                        let base = core.registers.read_word(inst.rs1());
+                        let address = ((base as isa::SignedWord) + imm) as isa::Address;
+                        match self.memory.read_word(address) {
+                            Ok(value) => core.registers.write_word(inst.rd(), value),
+                            Err(MemoryError::CacheMiss) => return,
+                            Err(MemoryError::InvalidAddress) => {
+                                self.trap(core, Trap::IllegalRead {
+                                    address: pc,
+                                    instruction: inst,
+                                    memory_address: address,
+                                });
+                            }
+                        }
+                    },
                     _ => {
                         panic!("Invalid load funct3code: 0x{:x}", inst.funct3());
                     }
@@ -297,7 +298,18 @@ impl Simulator {
                          let base = core.registers.read_word(inst.rs1());
                          let val = core.registers.read_word(inst.rs2());
                          let address = ((base as isa::SignedWord) + imm) as isa::Address;
-                         self.memory.write_word(address, val);
+                         match self.memory.write_word(address, val) {
+                             Ok(()) => (),
+                             Err(MemoryError::CacheMiss) => return,
+                             Err(MemoryError::InvalidAddress) => {
+                                 self.trap(core, Trap::IllegalWrite {
+                                     address: pc,
+                                     instruction: inst,
+                                     memory_address: address,
+                                     memory_value: val,
+                                 })
+                             }
+                         }
                     }
                     _ => {
                         panic!("Invalid store funct3code: 0x{:x}", inst.funct3());
@@ -311,7 +323,7 @@ impl Simulator {
                         println!("Argument {:X}: {:?}", address, self.memory.read_word(address));
                     }
                     _ => {
-                        
+
                     }
                 },
                 _ => {

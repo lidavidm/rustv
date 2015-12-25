@@ -1,6 +1,31 @@
 use isa::{self, Instruction};
 use binary::{Binary};
 
+#[derive(Debug)]
+pub enum MemoryError {
+    InvalidAddress,
+    CacheMiss,
+}
+
+pub type Result<T> = ::std::result::Result<T, MemoryError>;
+
+pub trait MemoryInterface {
+    const LATENCY: u32;
+
+    fn read_word(&self, address: isa::Address) -> Result<isa::Word>;
+    fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Result<()>;
+
+    // fn read_halfword(&self, address: isa::Address) -> Result<isa::HalfWord>;
+    // fn write_halfword(&self, address: isa::Address) -> Result<()>;
+
+    // fn read_byte(&self, address: isa::Address) -> Result<isa::Byte>;
+    // fn write_byte(&self, address: isa::Address) -> Result<()>;
+}
+
+pub struct Mmu<T: MemoryInterface> {
+    memory: T,
+}
+
 pub struct Memory {
     memory: Vec<u32>,
 }
@@ -23,8 +48,6 @@ pub struct Cache {
     cache: Vec<Vec<CacheBlock>>,
 }
 
-// TODO: refactor impls into a MemoryController(?) trait
-
 impl Memory {
     pub fn new(size: isa::Address, binary: Binary) -> Memory {
         let mut memory = binary.words.clone();
@@ -37,24 +60,28 @@ impl Memory {
         }
     }
 
-    pub fn read_word(&self, address: isa::Address) -> Option<isa::Word> {
+    pub fn read_instruction(&self, pc: isa::Address) -> Option<Instruction> {
+        self.memory.get(pc / 4).map(Clone::clone).map(Instruction::new)
+    }
+}
+
+impl MemoryInterface for Memory {
+    const LATENCY: u32 = 100;
+
+    fn read_word(&self, address: isa::Address) -> Result<isa::Word> {
         // memory is word-addressed but addresses are byte-addressed
-        self.memory.get(address / 4).map(Clone::clone)
+        self.memory.get(address / 4).map(Clone::clone).ok_or(MemoryError::InvalidAddress)
     }
 
-    pub fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Option<()> {
+    fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Result<()> {
         let address = address / 4;
-        if address >= self.memory.len() {
-            None
+        if address >= self.memory.len() || address <= 0 {
+            Err(MemoryError::InvalidAddress)
         }
         else {
             self.memory[address] = value;
-            Some(())
+            Ok(())
         }
-    }
-
-    pub fn read_instruction(&self, pc: isa::Address) -> Option<Instruction> {
-        self.memory.get(pc / 4).map(Clone::clone).map(Instruction::new)
     }
 }
 
@@ -72,15 +99,20 @@ impl Cache {
         }
     }
 
-    fn read_word(&self, address: isa::Address) -> Option<isa::Word> {
-        None
-    }
-
-    fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Option<()> {
-        None
-    }
-
     fn invalidate(&mut self, address: isa::Address) {
-        
+
     }
+}
+
+impl MemoryInterface for Cache {
+    const LATENCY: u32 = 1;
+
+    fn read_word(&self, address: isa::Address) -> Result<isa::Word> {
+        Err(MemoryError::InvalidAddress)
+    }
+
+    fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Result<()> {
+        Err(MemoryError::InvalidAddress)
+    }
+
 }
