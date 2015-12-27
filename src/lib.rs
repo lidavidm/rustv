@@ -16,16 +16,21 @@ fn it_works() {
     }
 }
 
-#[test]
-fn cache_address_parsing() {
-    let dm_cache_word = memory::Cache::new(4, 1, 1);
-    let dm_cache_doubleword = memory::Cache::new(4, 1, 2);
-    let fa_cache_doubleword = memory::Cache::new(1, 4, 2);
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    assert_eq!(dm_cache_word.parse_address(0xFFFFFFFD),
-               (0xFFFFFFF, 3, 1));
-    assert_eq!(dm_cache_doubleword.parse_address(0xFFFFFFFD),
-               (0x7FFFFFF, 3, 5));
-    assert_eq!(fa_cache_doubleword.parse_address(0xFFFFFFFD),
-               (0x1FFFFFFF, 0, 5));
+    #[test]
+    fn cache_address_parsing() {
+        let dm_cache_word = memory::Cache::new(4, 1, 1);
+        let dm_cache_doubleword = memory::Cache::new(4, 1, 2);
+        let fa_cache_doubleword = memory::Cache::new(1, 4, 2);
+
+        assert_eq!(dm_cache_word.parse_address(0xFFFFFFFD),
+                   (0xFFFFFFF, 3, 1));
+        assert_eq!(dm_cache_doubleword.parse_address(0xFFFFFFFD),
+                   (0x7FFFFFF, 3, 5));
+        assert_eq!(fa_cache_doubleword.parse_address(0xFFFFFFFD),
+                   (0x1FFFFFFF, 0, 5));
+    }
 }
