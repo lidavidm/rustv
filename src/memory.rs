@@ -52,9 +52,9 @@ type CacheSet = Vec<CacheBlock>;
 // TODO: use hashtable for a way?
 // TODO: hashtable-based FA cache?
 pub struct Cache {
-    num_sets: usize,
-    num_ways: usize,
-    block_words: usize,
+    num_sets: u32,
+    num_ways: u32,
+    block_words: u32,
     cache: Vec<CacheSet>,
 }
 
@@ -102,39 +102,39 @@ impl MemoryInterface for Memory {
 }
 
 impl Cache {
-    pub fn new(sets: usize, ways: usize, block_words: usize) -> Cache {
+    pub fn new(sets: u32, ways: u32, block_words: u32) -> Cache {
         let set = vec![CacheBlock {
             valid: false,
             tag: 0,
-            contents: vec![0; block_words],
+            contents: vec![0; block_words as usize],
             fetch_request: None,
-        }; ways];
+        }; ways as usize];
         Cache {
             num_sets: sets,
             num_ways: ways,
             block_words: block_words,
-            cache: vec![set; sets],
+            cache: vec![set; sets as usize],
         }
     }
 
-    fn parse_address(&self, address: isa::Address) -> (u32, u32, u32) {
+    pub fn parse_address(&self, address: isa::Address) -> (u32, u32, u32) {
         // TODO: use constant in ISA module for word->byte conversion
         let offset_mask = (self.block_words * 4 - 1) as u32;
         let offset = address & offset_mask;
         let index_mask = (self.num_sets - 1) as u32;
-        let index_shift = 32 - (self.block_words * 4).leading_zeros();
+        let index_shift = 32 - (self.block_words * 4).leading_zeros() - 1;
         let index = (address >> index_shift) & index_mask;
-        let tag_shift = index_shift + (32 - self.num_sets.leading_zeros());
+        let tag_shift = index_shift + (32 - self.num_sets.leading_zeros()) - 1;
         let tag = address >> tag_shift;
 
         (tag, index, offset)
     }
 
-    fn prefetch(&mut self, address: isa::Address) {
+    pub fn prefetch(&mut self, address: isa::Address) {
 
     }
 
-    fn invalidate(&mut self, address: isa::Address) {
+    pub fn invalidate(&mut self, address: isa::Address) {
 
     }
 }
