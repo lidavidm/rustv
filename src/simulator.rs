@@ -75,7 +75,7 @@ impl Simulator {
         };
         let mut cores = vec![base_core; self.num_cores];
         // hardcode GP
-        cores[0].registers.write_word(isa::Register::X3, 0x10860);
+        cores[0].registers.write_word(isa::Register::X3, 0x108D0);
         // hardcode SP
         cores[0].registers.write_word(isa::Register::X2, 0x7FFC);
         loop {

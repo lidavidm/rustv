@@ -33,11 +33,19 @@ pub struct Memory {
 }
 
 #[derive(Clone)]
+struct FetchRequest {
+    cycles_left: u32,
+}
+
+#[derive(Clone)]
 struct CacheBlock {
     valid: bool,
     tag: u32,
     contents: Vec<u32>,
+    fetch_request: Option<FetchRequest>,
 }
+
+type CacheSet = Vec<CacheBlock>;
 
 // TODO: probably want different caches for different strategies, and
 // investigate how LRU is implemented
@@ -47,7 +55,7 @@ pub struct Cache {
     num_sets: usize,
     num_ways: usize,
     block_words: usize,
-    cache: Vec<Vec<CacheBlock>>,
+    cache: Vec<CacheSet>,
 }
 
 impl Memory {
@@ -95,15 +103,17 @@ impl MemoryInterface for Memory {
 
 impl Cache {
     pub fn new(sets: usize, ways: usize, block_words: usize) -> Cache {
+        let set = vec![CacheBlock {
+            valid: false,
+            tag: 0,
+            contents: vec![0; block_words],
+            fetch_request: None,
+        }; ways];
         Cache {
             num_sets: sets,
             num_ways: ways,
             block_words: block_words,
-            cache: vec![vec![CacheBlock {
-                valid: false,
-                tag: 0,
-                contents: vec![0; block_words],
-            }; ways]; sets],
+            cache: vec![set; sets],
         }
     }
 
