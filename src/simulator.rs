@@ -98,20 +98,22 @@ impl Simulator {
         let pc = core.pc;
         if let Some(inst) = self.memory.read_instruction(pc) {
             match inst.opcode() {
-                // isa::opcodes::JALR => {
-                //     // TODO: assert funct3 is 0
-                //     let target = ((core.registers.read_word(inst.rs1()) as isa::SignedWord) + inst.i_imm()) as isa::Address;
-                //     if target == 0x0 {
-                //         // ret
-                //         core.running = false;
-                //     }
-                //     else {
-                //         let target = (((pc as isa::SignedWord) + inst.i_imm()) as isa::Address) & 0xFFFFFFFE;
-                //         core.registers.write_word(inst.rd(), (pc + 4) as isa::Word);
-                //         core.pc = target;
-                //         return;
-                //     }
-                // },
+                isa::opcodes::JALR => {
+                    // TODO: assert funct3 is 0
+                    let base = core.registers.read_word(inst.rs1())
+                        as isa::SignedWord;
+                    let target = (base + inst.i_imm()) as isa::Address;
+                    let retval = (pc + 4) as isa::Word;
+                    if target == 0x0 {
+                        // ret
+                        core.running = false;
+                    }
+                    else {
+                        core.registers.write_word(inst.rd(), retval);
+                        core.pc = target;
+                        return;
+                    }
+                },
                 isa::opcodes::JAL => {
                     let target = ((pc as isa::SignedWord) + inst.uj_imm()) as isa::Address;
                     core.registers.write_word(inst.rd(), (pc + 4) as isa::Word);
@@ -119,29 +121,29 @@ impl Simulator {
                     // panic!("JAL to {:X} 0x{:X}", pc, target);
                     return;
                 }
-                // isa::opcodes::BRANCH => {
-                //     let target = ((pc as isa::SignedWord) + inst.sb_imm()) as isa::Address;
-                //     let rs1 = core.registers.read_word(inst.rs1());
-                //     let rs2 = core.registers.read_word(inst.rs2());
-                //     if match inst.funct3() {
-                //         isa::funct3::BEQ => rs1 == rs2,
-                //         isa::funct3::BNE => rs1 != rs2,
-                //         isa::funct3::BLT => (rs1 as isa::SignedWord) < (rs2 as isa::SignedWord),
-                //         isa::funct3::BGE => (rs1 as isa::SignedWord) > (rs2 as isa::SignedWord),
-                //         isa::funct3::BLTU => rs1 < rs2,
-                //         isa::funct3::BGEU => rs1 > rs2,
-                //         _ => {
-                //             self.trap(core, Trap::IllegalInstruction {
-                //                 address: pc,
-                //                 instruction: inst,
-                //             });
-                //             false
-                //         }
-                //     } {
-                //         core.pc = target;
-                //         return;
-                //     }
-                // },
+                isa::opcodes::BRANCH => {
+                    let target = ((pc as isa::SignedWord) + inst.sb_imm()) as isa::Address;
+                    let rs1 = core.registers.read_word(inst.rs1());
+                    let rs2 = core.registers.read_word(inst.rs2());
+                    if match inst.funct3() {
+                        isa::funct3::BEQ => rs1 == rs2,
+                        isa::funct3::BNE => rs1 != rs2,
+                        isa::funct3::BLT => (rs1 as isa::SignedWord) < (rs2 as isa::SignedWord),
+                        isa::funct3::BGE => (rs1 as isa::SignedWord) > (rs2 as isa::SignedWord),
+                        isa::funct3::BLTU => rs1 < rs2,
+                        isa::funct3::BGEU => rs1 > rs2,
+                        _ => {
+                            self.trap(core, Trap::IllegalInstruction {
+                                address: pc,
+                                instruction: inst,
+                            });
+                            false
+                        }
+                    } {
+                        core.pc = target;
+                        return;
+                    }
+                },
                 isa::opcodes::INTEGER_IMMEDIATE => {
                     let imm = inst.i_imm();
                     let src = core.registers.read_word(inst.rs1()) as isa::SignedWord;
