@@ -28,7 +28,7 @@ pub enum MemoryError {
 pub type Result<T> = ::std::result::Result<T, MemoryError>;
 
 pub trait MemoryInterface {
-    const LATENCY: u32;
+    fn latency() -> u32;
 
     fn read_word(&self, address: isa::Address) -> Result<isa::Word>;
     fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Result<()>;
@@ -50,6 +50,8 @@ pub struct Memory {
 
 #[derive(Clone)]
 struct FetchRequest {
+    address: isa::Address,
+    prefetch: bool,
     cycles_left: u32,
 }
 
@@ -67,11 +69,12 @@ type CacheSet = Vec<CacheBlock>;
 // investigate how LRU is implemented
 // TODO: use hashtable for a way?
 // TODO: hashtable-based FA cache?
-pub struct Cache {
+pub struct Cache<T: MemoryInterface> {
     num_sets: u32,
     num_ways: u32,
     block_words: u32,
     cache: Vec<CacheSet>,
+    next_level: T,
 }
 
 impl Memory {
@@ -95,7 +98,9 @@ impl Memory {
 }
 
 impl MemoryInterface for Memory {
-    const LATENCY: u32 = 100;
+    fn latency() -> u32 {
+        100
+    }
 
     fn read_word(&self, address: isa::Address) -> Result<isa::Word> {
         // memory is word-addressed but addresses are byte-addressed
@@ -117,8 +122,8 @@ impl MemoryInterface for Memory {
     }
 }
 
-impl Cache {
-    pub fn new(sets: u32, ways: u32, block_words: u32) -> Cache {
+impl<T: MemoryInterface> Cache<T> {
+    pub fn new(sets: u32, ways: u32, block_words: u32, next_level: T) -> Cache<T> {
         let set = vec![CacheBlock {
             valid: false,
             tag: 0,
@@ -130,6 +135,7 @@ impl Cache {
             num_ways: ways,
             block_words: block_words,
             cache: vec![set; sets as usize],
+            next_level: next_level,
         }
     }
 
@@ -155,16 +161,27 @@ impl Cache {
     }
 }
 
-impl MemoryInterface for Cache {
-    const LATENCY: u32 = 1;
+impl<T: MemoryInterface> MemoryInterface for Cache<T> {
+    fn latency() -> u32 {
+        100
+    }
 
     fn read_word(&self, address: isa::Address) -> Result<isa::Word> {
-        Err(MemoryError::InvalidAddress)
+        let (tag, index, offset) = self.parse_address(address);
+        let ref set = self.cache[index as usize];
+        for way in set {
+            if way.tag == tag {
+                return Ok(way.contents[(offset / 4) as usize]);
+            }
+        }
+        Err(MemoryError::CacheMiss {
+            stall_cycles: Cache::<T>::latency() + T::latency()
+        })
     }
 
     fn write_word(&mut self, address: isa::Address, value: isa::Word)
                   -> Result<()> {
-        Err(MemoryError::InvalidAddress)
+        // XXX: temporary
+        self.next_level.write_word(address, value)
     }
-
 }
