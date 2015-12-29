@@ -30,7 +30,7 @@ pub type Result<T> = ::std::result::Result<T, MemoryError>;
 pub trait MemoryInterface {
     fn latency() -> u32;
 
-    fn read_word(&self, address: isa::Address) -> Result<isa::Word>;
+    fn read_word(&mut self, address: isa::Address) -> Result<isa::Word>;
     fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Result<()>;
 
     // fn read_halfword(&self, address: isa::Address) -> Result<isa::HalfWord>;
@@ -63,17 +63,14 @@ struct CacheBlock {
     fetch_request: Option<FetchRequest>,
 }
 
-type CacheSet = Vec<CacheBlock>;
-
 // TODO: probably want different caches for different strategies, and
 // investigate how LRU is implemented
 // TODO: use hashtable for a way?
 // TODO: hashtable-based FA cache?
-pub struct Cache<T: MemoryInterface> {
+pub struct DirectMappedCache<T: MemoryInterface> {
     num_sets: u32,
-    num_ways: u32,
     block_words: u32,
-    cache: Vec<CacheSet>,
+    cache: Vec<CacheBlock>,
     next_level: T,
 }
 
@@ -102,7 +99,7 @@ impl MemoryInterface for Memory {
         100
     }
 
-    fn read_word(&self, address: isa::Address) -> Result<isa::Word> {
+    fn read_word(&mut self, address: isa::Address) -> Result<isa::Word> {
         // memory is word-addressed but addresses are byte-addressed
         self.memory.get((address / 4) as usize)
             .map(Clone::clone)
@@ -122,17 +119,17 @@ impl MemoryInterface for Memory {
     }
 }
 
-impl<T: MemoryInterface> Cache<T> {
-    pub fn new(sets: u32, ways: u32, block_words: u32, next_level: T) -> Cache<T> {
-        let set = vec![CacheBlock {
+impl<T: MemoryInterface> DirectMappedCache<T> {
+    pub fn new(sets: u32, block_words: u32, next_level: T)
+               -> DirectMappedCache<T> {
+        let set = CacheBlock {
             valid: false,
             tag: 0,
             contents: vec![0; block_words as usize],
             fetch_request: None,
-        }; ways as usize];
-        Cache {
+        };
+        DirectMappedCache {
             num_sets: sets,
-            num_ways: ways,
             block_words: block_words,
             cache: vec![set; sets as usize],
             next_level: next_level,
@@ -152,6 +149,11 @@ impl<T: MemoryInterface> Cache<T> {
         (tag, index, offset)
     }
 
+    fn normalize_address(&self, address: isa::Address) -> isa::Address {
+        let offset_mask = !(self.block_words * 4 - 1);
+        address & offset_mask
+    }
+
     pub fn prefetch(&mut self, address: isa::Address) {
 
     }
@@ -161,21 +163,33 @@ impl<T: MemoryInterface> Cache<T> {
     }
 }
 
-impl<T: MemoryInterface> MemoryInterface for Cache<T> {
+impl<T: MemoryInterface> MemoryInterface for DirectMappedCache<T> {
     fn latency() -> u32 {
         100
     }
 
-    fn read_word(&self, address: isa::Address) -> Result<isa::Word> {
+    fn read_word(&mut self, address: isa::Address) -> Result<isa::Word> {
+        let normalized = self.normalize_address(address);
         let (tag, index, offset) = self.parse_address(address);
-        let ref set = self.cache[index as usize];
-        for way in set {
-            if way.tag == tag {
-                return Ok(way.contents[(offset / 4) as usize]);
-            }
+        let ref mut set = self.cache[index as usize];
+        let stall = DirectMappedCache::<T>::latency() + T::latency();
+        if set.tag == tag {
+            return Ok(set.contents[(offset / 4) as usize]);
+        }
+        else if let None = set.fetch_request {
+            set.fetch_request = Some(FetchRequest {
+                address: normalized,
+                prefetch: false,
+                cycles_left: stall,
+            })
+        }
+        else if let Some(ref fetch_request) = set.fetch_request {
+            return Err(MemoryError::CacheMiss {
+                stall_cycles: fetch_request.cycles_left
+            });
         }
         Err(MemoryError::CacheMiss {
-            stall_cycles: Cache::<T>::latency() + T::latency()
+            stall_cycles: stall,
         })
     }
 
