@@ -75,7 +75,13 @@ pub struct DirectMappedCache<T: MemoryInterface> {
 }
 
 impl Memory {
-    pub fn new(size: isa::Address, binary: Binary) -> Memory {
+    pub fn new(size: isa::Address) -> Memory {
+        Memory {
+            memory: vec![0; size as usize],
+        }
+    }
+
+    pub fn new_from_binary(size: isa::Address, binary: Binary) -> Memory {
         let mut memory = binary.words.clone();
         let size = size as usize;
         if size > memory.len() {

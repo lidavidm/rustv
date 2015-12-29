@@ -75,7 +75,7 @@ impl RegisterFile {
 
 impl Simulator {
     pub fn new(num_cores: usize, binary: Binary) -> Simulator {
-        let memory = Memory::new(0x2000, binary);
+        let memory = Memory::new_from_binary(0x2000, binary);
         // TODO: initialize GP, registers (GP is in headers)
         Simulator {
             num_cores: num_cores,
