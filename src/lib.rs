@@ -25,7 +25,8 @@ fn it_works() {
     use std::path::Path;
     match binary::Binary::new_from_hex_file(Path::new("../riscv/kernel.hex")) {
         Ok(b) => {
-            let mut simulator = simulator::Simulator::new(1, b);
+            let memory = memory::Memory::new_from_binary(0x2000, b);
+            let mut simulator = simulator::Simulator::new(1, memory);
             simulator.run();
         },
         Err(err) => println!("Error: {:?}", err),
@@ -37,9 +38,13 @@ mod tests {
     #[test]
     fn cache_address_parsing() {
         use memory::*;
+        use std::rc::Rc;
+        use std::cell::RefCell;
 
-        let dm_cache_word = DirectMappedCache::new(4, 1, Memory::new(1));
-        let dm_cache_doubleword = DirectMappedCache::new(4, 2, Memory::new(1));
+        let memory = Memory::new(16);
+        let memory_ref = Rc::new(RefCell::new(memory));
+        let dm_cache_word = DirectMappedCache::new(4, 1, memory_ref.clone());
+        let dm_cache_doubleword = DirectMappedCache::new(4, 2, memory_ref.clone());
 
         assert_eq!(dm_cache_word.parse_address(0xFFFFFFFD),
                    (0xFFFFFFF, 3, 1));

@@ -14,6 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::rc::Rc;
+use std::cell::RefCell;
+
 use isa::{self, Instruction};
 use binary::{Binary};
 
@@ -71,7 +74,7 @@ pub struct DirectMappedCache<T: MemoryInterface> {
     num_sets: u32,
     block_words: u32,
     cache: Vec<CacheBlock>,
-    next_level: T,
+    next_level: Rc<RefCell<T>>,
 }
 
 impl Memory {
@@ -126,7 +129,7 @@ impl MemoryInterface for Memory {
 }
 
 impl<T: MemoryInterface> DirectMappedCache<T> {
-    pub fn new(sets: u32, block_words: u32, next_level: T)
+    pub fn new(sets: u32, block_words: u32, next_level: Rc<RefCell<T>>)
                -> DirectMappedCache<T> {
         let set = CacheBlock {
             valid: false,
@@ -202,6 +205,6 @@ impl<T: MemoryInterface> MemoryInterface for DirectMappedCache<T> {
     fn write_word(&mut self, address: isa::Address, value: isa::Word)
                   -> Result<()> {
         // XXX: temporary
-        self.next_level.write_word(address, value)
+        self.next_level.borrow_mut().write_word(address, value)
     }
 }
