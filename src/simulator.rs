@@ -74,8 +74,9 @@ impl RegisterFile {
 }
 
 impl Simulator {
-    pub fn new(num_cores: usize, binary: Binary) -> Simulator {
-        let memory = Memory::new_from_binary(0x2000, binary);
+    pub fn new(num_cores: usize, memory: Memory) -> Simulator {
+        // TODO: pass in GP, SP, _start
+        // TODO: allow API user to specify core-cache layout
         // TODO: initialize GP, registers (GP is in headers)
         Simulator {
             num_cores: num_cores,
