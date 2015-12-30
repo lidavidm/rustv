@@ -31,10 +31,17 @@ pub enum MemoryError {
 pub type Result<T> = ::std::result::Result<T, MemoryError>;
 
 pub trait MemoryInterface {
-    fn latency() -> u32;
+    fn latency(&self) -> u32;
 
     fn read_word(&mut self, address: isa::Address) -> Result<isa::Word>;
     fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Result<()>;
+
+    fn read_instruction(&mut self, address: isa::Address) -> Option<Instruction> {
+        match self.read_word(address / 4) {
+            Ok(word) => Some(Instruction::new(word)),
+            Err(_) => None,
+        }
+    }
 
     // fn read_halfword(&self, address: isa::Address) -> Result<isa::HalfWord>;
     // fn write_halfword(&self, address: isa::Address) -> Result<()>;
@@ -70,11 +77,11 @@ struct CacheBlock {
 // investigate how LRU is implemented
 // TODO: use hashtable for a way?
 // TODO: hashtable-based FA cache?
-pub struct DirectMappedCache<T: MemoryInterface> {
+pub struct DirectMappedCache {
     num_sets: u32,
     block_words: u32,
     cache: Vec<CacheBlock>,
-    next_level: Rc<RefCell<T>>,
+    next_level: Rc<RefCell<MemoryInterface>>,
 }
 
 impl Memory {
@@ -95,16 +102,10 @@ impl Memory {
             memory: memory,
         }
     }
-
-    pub fn read_instruction(&self, pc: isa::Address) -> Option<Instruction> {
-        self.memory.get((pc / 4) as usize)
-            .map(Clone::clone)
-            .map(Instruction::new)
-    }
 }
 
 impl MemoryInterface for Memory {
-    fn latency() -> u32 {
+    fn latency(&self) -> u32 {
         100
     }
 
@@ -126,11 +127,17 @@ impl MemoryInterface for Memory {
             Ok(())
         }
     }
+
+    fn read_instruction(&mut self, pc: isa::Address) -> Option<Instruction> {
+        self.memory.get((pc / 4) as usize)
+            .map(Clone::clone)
+            .map(Instruction::new)
+    }
 }
 
-impl<T: MemoryInterface> DirectMappedCache<T> {
-    pub fn new(sets: u32, block_words: u32, next_level: Rc<RefCell<T>>)
-               -> DirectMappedCache<T> {
+impl DirectMappedCache {
+    pub fn new(sets: u32, block_words: u32, next_level: Rc<RefCell<MemoryInterface>>)
+               -> DirectMappedCache {
         let set = CacheBlock {
             valid: false,
             tag: 0,
@@ -172,16 +179,16 @@ impl<T: MemoryInterface> DirectMappedCache<T> {
     }
 }
 
-impl<T: MemoryInterface> MemoryInterface for DirectMappedCache<T> {
-    fn latency() -> u32 {
+impl MemoryInterface for DirectMappedCache {
+    fn latency(&self) -> u32 {
         100
     }
 
     fn read_word(&mut self, address: isa::Address) -> Result<isa::Word> {
         let normalized = self.normalize_address(address);
+        let stall = self.latency() + self.next_level.borrow().latency();
         let (tag, index, offset) = self.parse_address(address);
         let ref mut set = self.cache[index as usize];
-        let stall = DirectMappedCache::<T>::latency() + T::latency();
         if set.tag == tag {
             return Ok(set.contents[(offset / 4) as usize]);
         }

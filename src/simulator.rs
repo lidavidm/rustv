@@ -14,25 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::cell::RefCell;
+use std::rc::Rc;
+
 use isa;
 use binary::{Binary};
 use memory::{MemoryInterface, Memory, MemoryError};
 
-pub struct Simulator {
-    num_cores: usize,
-    memory: Memory,
-}
-
-#[derive(Clone)]
 struct RegisterFile {
     registers: [isa::Word; 32],
 }
 
-#[derive(Clone)]
-struct Core {
+pub struct Core<'a> {
     pc: isa::Address,
     registers: RegisterFile,
     running: bool,
+    cache: Rc<RefCell<Box<MemoryInterface + 'a>>>,
+}
+
+pub struct Simulator<'a> {
+    cores: Vec<Core<'a>>,
+    memory: Rc<RefCell<Box<MemoryInterface + 'a>>>,
 }
 
 #[derive(Debug)]
@@ -73,75 +75,47 @@ impl RegisterFile {
     }
 }
 
-impl Simulator {
-    pub fn new(num_cores: usize, memory: Memory) -> Simulator {
-        // TODO: pass in GP, SP, _start
-        // TODO: allow API user to specify core-cache layout
-        // TODO: initialize GP, registers (GP is in headers)
-        Simulator {
-            num_cores: num_cores,
-            memory: memory,
-        }
-    }
-
-    pub fn run(&mut self) {
-        let base_core = Core {
-            pc: 0x1002C,
+impl<'a> Core<'a> {
+    pub fn new(cache: Rc<RefCell<Box<MemoryInterface + 'a>>>) -> Core<'a> {
+        Core {
+            pc: 0, // TODO: hardcoded: fix later
             registers: RegisterFile::new(),
             running: true,
-        };
-        let mut cores = vec![base_core; self.num_cores];
-        // hardcode GP
-        cores[0].registers.write_word(isa::Register::X3, 0x108D0);
-        // hardcode SP
-        cores[0].registers.write_word(isa::Register::X2, 0x7FFC);
-        loop {
-            let mut ran = false;
-            for core in cores.iter_mut() {
-                if !core.running {
-                    continue;
-                }
-                self.step_core(core);
-                ran = true;
-            }
-            if !ran {
-                println!("All cores are not running, stopping...");
-                break;
-            }
+            cache: cache,
         }
     }
 
-    fn step_core(&mut self, core: &mut Core) {
-        let pc = core.pc;
-        if let Some(inst) = self.memory.read_instruction(pc) {
+    fn step(&mut self, inst: Option<isa::Instruction>) {
+        let pc = self.pc;
+        if let Some(inst) = inst {
             match inst.opcode() {
                 isa::opcodes::JALR => {
                     // TODO: assert funct3 is 0
-                    let base = core.registers.read_word(inst.rs1())
+                    let base = self.registers.read_word(inst.rs1())
                         as isa::SignedWord;
                     let target = (base + inst.i_imm()) as isa::Address;
                     let retval = (pc + 4) as isa::Word;
                     if target == 0x0 {
                         // ret
-                        core.running = false;
+                        self.running = false;
                     }
                     else {
-                        core.registers.write_word(inst.rd(), retval);
-                        core.pc = target;
+                        self.registers.write_word(inst.rd(), retval);
+                        self.pc = target;
                         return;
                     }
                 },
                 isa::opcodes::JAL => {
                     let target = ((pc as isa::SignedWord) + inst.uj_imm()) as isa::Address;
-                    core.registers.write_word(inst.rd(), (pc + 4) as isa::Word);
-                    core.pc = target;
+                    self.registers.write_word(inst.rd(), (pc + 4) as isa::Word);
+                    self.pc = target;
                     // panic!("JAL to {:X} 0x{:X}", pc, target);
                     return;
                 }
                 isa::opcodes::BRANCH => {
                     let target = ((pc as isa::SignedWord) + inst.sb_imm()) as isa::Address;
-                    let rs1 = core.registers.read_word(inst.rs1());
-                    let rs2 = core.registers.read_word(inst.rs2());
+                    let rs1 = self.registers.read_word(inst.rs1());
+                    let rs2 = self.registers.read_word(inst.rs2());
                     if match inst.funct3() {
                         isa::funct3::BEQ => rs1 == rs2,
                         isa::funct3::BNE => rs1 != rs2,
@@ -150,20 +124,20 @@ impl Simulator {
                         isa::funct3::BLTU => rs1 < rs2,
                         isa::funct3::BGEU => rs1 > rs2,
                         _ => {
-                            self.trap(core, Trap::IllegalInstruction {
+                            self.trap(Trap::IllegalInstruction {
                                 address: pc,
                                 instruction: inst,
                             });
                             false
                         }
                     } {
-                        core.pc = target;
+                        self.pc = target;
                         return;
                     }
                 },
                 isa::opcodes::INTEGER_IMMEDIATE => {
                     let imm = inst.i_imm();
-                    let src = core.registers.read_word(inst.rs1()) as isa::SignedWord;
+                    let src = self.registers.read_word(inst.rs1()) as isa::SignedWord;
                     if let Some(value) = match inst.funct3() {
                         isa::funct3::ADDI => {
                             Some(src.wrapping_add(imm) as isa::Word)
@@ -195,7 +169,7 @@ impl Simulator {
                                 isa::funct7::SRLI => Some(((src as isa::Word) >> inst.shamt()) as isa::Word),
                                 isa::funct7::SRAI => Some((src >> inst.shamt()) as isa::Word),
                                 _ => {
-                                    self.trap(core, Trap::IllegalInstruction {
+                                    self.trap(Trap::IllegalInstruction {
                                         address: pc,
                                         instruction: inst,
                                     });
@@ -210,19 +184,19 @@ impl Simulator {
                             Some((src & imm) as isa::Word)
                         },
                         _ => {
-                            self.trap(core, Trap::IllegalInstruction {
+                            self.trap(Trap::IllegalInstruction {
                                 address: pc,
                                 instruction: inst,
                             });
                             None
                         }
                     } {
-                        core.registers.write_word(inst.rd(), value);
+                        self.registers.write_word(inst.rd(), value);
                     }
                 },
                 isa::opcodes::INTEGER_REGISTER => {
-                    let src1 = core.registers.read_word(inst.rs1());
-                    let src2 = core.registers.read_word(inst.rs2());
+                    let src1 = self.registers.read_word(inst.rs1());
+                    let src2 = self.registers.read_word(inst.rs2());
                     let src2_shift = src2 & 0x1F;
                     if let Some(value) = match inst.funct3() {
                         isa::funct3::ADD_SUB => {
@@ -230,7 +204,7 @@ impl Simulator {
                                 isa::funct7::ADD_SRL => Some(((src1 as isa::SignedWord).wrapping_add(src2 as isa::SignedWord)) as isa::Word),
                                 isa::funct7::SUB_SRA => Some(((src1 as isa::SignedWord).wrapping_sub(src2 as isa::SignedWord)) as isa::Word),
                                 _ => {
-                                    self.trap(core, Trap::IllegalInstruction {
+                                    self.trap(Trap::IllegalInstruction {
                                         address: pc,
                                         instruction: inst,
                                     });
@@ -265,7 +239,7 @@ impl Simulator {
                                 isa::funct7::ADD_SRL => Some(src1 >> src2_shift),
                                 isa::funct7::SUB_SRA => Some(((src1 as isa::SignedWord) >> src2_shift) as isa::Word),
                                 _ => {
-                                    self.trap(core, Trap::IllegalInstruction {
+                                    self.trap(Trap::IllegalInstruction {
                                         address: pc,
                                         instruction: inst,
                                     });
@@ -280,27 +254,28 @@ impl Simulator {
                             Some(src1 & src2)
                         },
                         _ => {
-                            self.trap(core, Trap::IllegalInstruction {
+                            self.trap(Trap::IllegalInstruction {
                                 address: pc,
                                 instruction: inst,
                             });
                             None
                         }
                     } {
-                        core.registers.write_word(inst.rd(), value);
+                        self.registers.write_word(inst.rd(), value);
                     }
                 },
                 isa::opcodes::LOAD => match inst.funct3() {
                     isa::funct3::LW => {
                         let imm = inst.i_imm();
-                        let base = core.registers.read_word(inst.rs1());
+                        let base = self.registers.read_word(inst.rs1());
                         let address = ((base as isa::SignedWord) + imm) as isa::Address;
-                        match self.memory.read_word(address) {
+                        let result = self.cache.borrow_mut().read_word(address);
+                        match result {
                             Ok(value) =>
-                                core.registers.write_word(inst.rd(), value),
+                                self.registers.write_word(inst.rd(), value),
                             Err(MemoryError::CacheMiss {..}) => return,
                             Err(MemoryError::InvalidAddress) => {
-                                self.trap(core, Trap::IllegalRead {
+                                self.trap(Trap::IllegalRead {
                                     address: pc,
                                     instruction: inst,
                                     memory_address: address,
@@ -315,14 +290,15 @@ impl Simulator {
                 isa::opcodes::STORE => match inst.funct3() {
                      isa::funct3::SW => {
                          let imm = inst.s_imm();
-                         let base = core.registers.read_word(inst.rs1());
-                         let val = core.registers.read_word(inst.rs2());
+                         let base = self.registers.read_word(inst.rs1());
+                         let val = self.registers.read_word(inst.rs2());
                          let address = ((base as isa::SignedWord) + imm) as isa::Address;
-                         match self.memory.write_word(address, val) {
+                         let result = self.cache.borrow_mut().write_word(address, val);
+                         match result {
                              Ok(()) => (),
                              Err(MemoryError::CacheMiss {..}) => return,
                              Err(MemoryError::InvalidAddress) => {
-                                 self.trap(core, Trap::IllegalWrite {
+                                 self.trap(Trap::IllegalWrite {
                                      address: pc,
                                      instruction: inst,
                                      memory_address: address,
@@ -338,9 +314,9 @@ impl Simulator {
                 isa::opcodes::SYSTEM => match inst.i_imm() {
                     0x0 => {
                         // System call
-                        println!("System call {}:", core.registers.read_word(isa::Register::X10));
-                        let address = core.registers.read_word(isa::Register::X11);
-                        println!("Argument {:X}: {:?}", address, self.memory.read_word(address));
+                        println!("System call {}:", self.registers.read_word(isa::Register::X10));
+                        let address = self.registers.read_word(isa::Register::X11);
+                        println!("Argument {:X}: {:?}", address, self.cache.borrow_mut().read_word(address));
                     }
                     _ => {
 
@@ -354,11 +330,46 @@ impl Simulator {
         else {
             // trap
         }
-        core.pc += 4;
+        self.pc += 4;
     }
 
-    fn trap(&mut self, core: &mut Core, trap: Trap) {
+    fn trap(&mut self, trap: Trap) {
         println!("Trap: {:?}", trap);
-        core.running = false;
+        self.running = false;
+    }
+}
+
+impl<'a> Simulator<'a> {
+    pub fn new(cores: Vec<Core<'a>>, memory: Rc<RefCell<Box<MemoryInterface + 'a>>>) -> Simulator<'a> {
+        // TODO: pass in GP, SP, _start
+        // TODO: initialize GP, registers (GP is in headers)
+        Simulator {
+            cores: cores,
+            memory: memory,
+        }
+    }
+
+    pub fn run(&mut self) {
+        // hardcode _start
+        self.cores[0].pc = 0x1002C;
+        // hardcode GP
+        self.cores[0].registers.write_word(isa::Register::X3, 0x108D0);
+        // hardcode SP
+        self.cores[0].registers.write_word(isa::Register::X2, 0x7FFC);
+        loop {
+            let mut ran = false;
+            for core in self.cores.iter_mut() {
+                if !core.running {
+                    continue;
+                }
+                let inst = self.memory.borrow_mut().read_instruction(core.pc);
+                core.step(inst);
+                ran = true;
+            }
+            if !ran {
+                println!("All cores are not running, stopping...");
+                break;
+            }
+        }
     }
 }

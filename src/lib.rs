@@ -22,11 +22,16 @@ pub mod simulator;
 
 #[test]
 fn it_works() {
+    use std::rc::Rc;
+    use std::cell::RefCell;
+
     use std::path::Path;
     match binary::Binary::new_from_hex_file(Path::new("../riscv/kernel.hex")) {
         Ok(b) => {
             let memory = memory::Memory::new_from_binary(0x2000, b);
-            let mut simulator = simulator::Simulator::new(1, memory);
+            let memory_ref = Rc::new(RefCell::new(Box::new(memory) as Box<memory::MemoryInterface>));
+            let core = simulator::Core::new(memory_ref.clone());
+            let mut simulator = simulator::Simulator::new(vec![core], memory_ref.clone());
             simulator.run();
         },
         Err(err) => println!("Error: {:?}", err),
