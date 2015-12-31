@@ -18,8 +18,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use isa;
-use binary::{Binary};
-use memory::{MemoryInterface, Memory, MemoryError};
+use memory::{MemoryInterface, MemoryError};
 
 struct RegisterFile {
     registers: [isa::Word; 32],
@@ -76,259 +75,253 @@ impl RegisterFile {
 }
 
 impl<'a> Core<'a> {
+    // TODO: take Rc<RefCell<>> to Memory as well?
     pub fn new(cache: Rc<RefCell<Box<MemoryInterface + 'a>>>) -> Core<'a> {
         Core {
-            pc: 0, // TODO: hardcoded: fix later
+            pc: 0x1002c, // TODO: hardcoded: fix later
             registers: RegisterFile::new(),
             running: true,
             cache: cache,
         }
     }
 
-    fn step(&mut self, inst: Option<isa::Instruction>) {
+    fn step(&mut self, inst: isa::Instruction) {
         let pc = self.pc;
-        if let Some(inst) = inst {
-            match inst.opcode() {
-                isa::opcodes::JALR => {
-                    // TODO: assert funct3 is 0
-                    let base = self.registers.read_word(inst.rs1())
-                        as isa::SignedWord;
-                    let target = (base + inst.i_imm()) as isa::Address;
-                    let retval = (pc + 4) as isa::Word;
-                    if target == 0x0 {
-                        // ret
-                        self.running = false;
-                    }
-                    else {
-                        self.registers.write_word(inst.rd(), retval);
-                        self.pc = target;
-                        return;
-                    }
-                },
-                isa::opcodes::JAL => {
-                    let target = ((pc as isa::SignedWord) + inst.uj_imm()) as isa::Address;
-                    self.registers.write_word(inst.rd(), (pc + 4) as isa::Word);
+        match inst.opcode() {
+            isa::opcodes::JALR => {
+                // TODO: assert funct3 is 0
+                let base = self.registers.read_word(inst.rs1())
+                    as isa::SignedWord;
+                let target = (base + inst.i_imm()) as isa::Address;
+                let retval = (pc + 4) as isa::Word;
+                if target == 0x0 {
+                    // ret
+                    self.running = false;
+                }
+                else {
+                    self.registers.write_word(inst.rd(), retval);
                     self.pc = target;
-                    // panic!("JAL to {:X} 0x{:X}", pc, target);
                     return;
                 }
-                isa::opcodes::BRANCH => {
-                    let target = ((pc as isa::SignedWord) + inst.sb_imm()) as isa::Address;
-                    let rs1 = self.registers.read_word(inst.rs1());
-                    let rs2 = self.registers.read_word(inst.rs2());
-                    if match inst.funct3() {
-                        isa::funct3::BEQ => rs1 == rs2,
-                        isa::funct3::BNE => rs1 != rs2,
-                        isa::funct3::BLT => (rs1 as isa::SignedWord) < (rs2 as isa::SignedWord),
-                        isa::funct3::BGE => (rs1 as isa::SignedWord) > (rs2 as isa::SignedWord),
-                        isa::funct3::BLTU => rs1 < rs2,
-                        isa::funct3::BGEU => rs1 > rs2,
-                        _ => {
-                            self.trap(Trap::IllegalInstruction {
-                                address: pc,
-                                instruction: inst,
-                            });
-                            false
-                        }
-                    } {
-                        self.pc = target;
-                        return;
+            },
+            isa::opcodes::JAL => {
+                let target = ((pc as isa::SignedWord) + inst.uj_imm()) as isa::Address;
+                self.registers.write_word(inst.rd(), (pc + 4) as isa::Word);
+                self.pc = target;
+                // panic!("JAL to {:X} 0x{:X}", pc, target);
+                return;
+            }
+            isa::opcodes::BRANCH => {
+                let target = ((pc as isa::SignedWord) + inst.sb_imm()) as isa::Address;
+                let rs1 = self.registers.read_word(inst.rs1());
+                let rs2 = self.registers.read_word(inst.rs2());
+                if match inst.funct3() {
+                    isa::funct3::BEQ => rs1 == rs2,
+                    isa::funct3::BNE => rs1 != rs2,
+                    isa::funct3::BLT => (rs1 as isa::SignedWord) < (rs2 as isa::SignedWord),
+                    isa::funct3::BGE => (rs1 as isa::SignedWord) > (rs2 as isa::SignedWord),
+                    isa::funct3::BLTU => rs1 < rs2,
+                    isa::funct3::BGEU => rs1 > rs2,
+                    _ => {
+                        self.trap(Trap::IllegalInstruction {
+                            address: pc,
+                            instruction: inst,
+                        });
+                        false
                     }
-                },
-                isa::opcodes::INTEGER_IMMEDIATE => {
-                    let imm = inst.i_imm();
-                    let src = self.registers.read_word(inst.rs1()) as isa::SignedWord;
-                    if let Some(value) = match inst.funct3() {
-                        isa::funct3::ADDI => {
-                            Some(src.wrapping_add(imm) as isa::Word)
-                        },
-                        isa::funct3::SLLI => {
-                            Some((src << inst.shamt()) as isa::Word)
-                        },
-                        isa::funct3::SLTI => {
-                            if src < imm {
-                                Some(1)
-                            }
-                            else {
-                                Some(0)
-                            }
-                        },
-                        isa::funct3::SLTIU => {
-                            if (src as isa::Word) < (imm as isa::Word) {
-                                Some(1)
-                            }
-                            else {
-                                Some(0)
-                            }
-                        },
-                        isa::funct3::XORI => {
-                            Some((src ^ imm) as isa::Word)
-                        },
-                        isa::funct3::SRLI_SRAI => {
-                            match inst.funct7() {
-                                isa::funct7::SRLI => Some(((src as isa::Word) >> inst.shamt()) as isa::Word),
-                                isa::funct7::SRAI => Some((src >> inst.shamt()) as isa::Word),
-                                _ => {
-                                    self.trap(Trap::IllegalInstruction {
-                                        address: pc,
-                                        instruction: inst,
-                                    });
-                                    None
-                                }
-                            }
-                        },
-                        isa::funct3::ORI => {
-                            Some((src | imm) as isa::Word)
-                        },
-                        isa::funct3::ANDI => {
-                            Some((src & imm) as isa::Word)
-                        },
-                        _ => {
-                            self.trap(Trap::IllegalInstruction {
-                                address: pc,
-                                instruction: inst,
-                            });
-                            None
+                } {
+                    self.pc = target;
+                    return;
+                }
+            },
+            isa::opcodes::INTEGER_IMMEDIATE => {
+                let imm = inst.i_imm();
+                let src = self.registers.read_word(inst.rs1()) as isa::SignedWord;
+                if let Some(value) = match inst.funct3() {
+                    isa::funct3::ADDI => {
+                        Some(src.wrapping_add(imm) as isa::Word)
+                    },
+                    isa::funct3::SLLI => {
+                        Some((src << inst.shamt()) as isa::Word)
+                    },
+                    isa::funct3::SLTI => {
+                        if src < imm {
+                            Some(1)
                         }
-                    } {
-                        self.registers.write_word(inst.rd(), value);
-                    }
-                },
-                isa::opcodes::INTEGER_REGISTER => {
-                    let src1 = self.registers.read_word(inst.rs1());
-                    let src2 = self.registers.read_word(inst.rs2());
-                    let src2_shift = src2 & 0x1F;
-                    if let Some(value) = match inst.funct3() {
-                        isa::funct3::ADD_SUB => {
-                            match inst.funct7() {
-                                isa::funct7::ADD_SRL => Some(((src1 as isa::SignedWord).wrapping_add(src2 as isa::SignedWord)) as isa::Word),
-                                isa::funct7::SUB_SRA => Some(((src1 as isa::SignedWord).wrapping_sub(src2 as isa::SignedWord)) as isa::Word),
-                                _ => {
-                                    self.trap(Trap::IllegalInstruction {
-                                        address: pc,
-                                        instruction: inst,
-                                    });
-                                    None
-                                }
-                            }
-                        },
-                        isa::funct3::SLL => {
-                            Some(src1 << src2_shift)
-                        },
-                        isa::funct3::SLT => {
-                            if (src1 as isa::SignedWord) < (src2 as isa::SignedWord) {
-                                Some(1)
-                            }
-                            else {
-                                Some(0)
-                            }
-                        },
-                        isa::funct3::SLTU => {
-                            if src1 < src2 {
-                                Some(1)
-                            }
-                            else {
-                                Some(0)
-                            }
-                        },
-                        isa::funct3::XOR => {
-                            Some(src1 ^ src2)
-                        },
-                        isa::funct3::SRL_SRA => {
-                            match inst.funct7() {
-                                isa::funct7::ADD_SRL => Some(src1 >> src2_shift),
-                                isa::funct7::SUB_SRA => Some(((src1 as isa::SignedWord) >> src2_shift) as isa::Word),
-                                _ => {
-                                    self.trap(Trap::IllegalInstruction {
-                                        address: pc,
-                                        instruction: inst,
-                                    });
-                                    None
-                                }
-                            }
-                        },
-                        isa::funct3::OR => {
-                            Some(src1 | src2)
-                        },
-                        isa::funct3::AND => {
-                            Some(src1 & src2)
-                        },
-                        _ => {
-                            self.trap(Trap::IllegalInstruction {
-                                address: pc,
-                                instruction: inst,
-                            });
-                            None
+                        else {
+                            Some(0)
                         }
-                    } {
-                        self.registers.write_word(inst.rd(), value);
-                    }
-                },
-                isa::opcodes::LOAD => match inst.funct3() {
-                    isa::funct3::LW => {
-                        let imm = inst.i_imm();
-                        let base = self.registers.read_word(inst.rs1());
-                        let address = ((base as isa::SignedWord) + imm) as isa::Address;
-                        let result = self.cache.borrow_mut().read_word(address);
-                        match result {
-                            Ok(value) =>
-                                self.registers.write_word(inst.rd(), value),
-                            Err(MemoryError::CacheMiss {..}) => return,
-                            Err(MemoryError::InvalidAddress) => {
-                                self.trap(Trap::IllegalRead {
+                    },
+                    isa::funct3::SLTIU => {
+                        if (src as isa::Word) < (imm as isa::Word) {
+                            Some(1)
+                        }
+                        else {
+                            Some(0)
+                        }
+                    },
+                    isa::funct3::XORI => {
+                        Some((src ^ imm) as isa::Word)
+                    },
+                    isa::funct3::SRLI_SRAI => {
+                        match inst.funct7() {
+                            isa::funct7::SRLI => Some(((src as isa::Word) >> inst.shamt()) as isa::Word),
+                            isa::funct7::SRAI => Some((src >> inst.shamt()) as isa::Word),
+                            _ => {
+                                self.trap(Trap::IllegalInstruction {
                                     address: pc,
                                     instruction: inst,
-                                    memory_address: address,
                                 });
+                                None
                             }
                         }
                     },
+                    isa::funct3::ORI => {
+                        Some((src | imm) as isa::Word)
+                    },
+                    isa::funct3::ANDI => {
+                        Some((src & imm) as isa::Word)
+                    },
                     _ => {
-                        panic!("Invalid load funct3code: 0x{:x}", inst.funct3());
+                        self.trap(Trap::IllegalInstruction {
+                            address: pc,
+                            instruction: inst,
+                        });
+                        None
                     }
-                },
-                isa::opcodes::STORE => match inst.funct3() {
-                     isa::funct3::SW => {
-                         let imm = inst.s_imm();
-                         let base = self.registers.read_word(inst.rs1());
-                         let val = self.registers.read_word(inst.rs2());
-                         let address = ((base as isa::SignedWord) + imm) as isa::Address;
-                         let result = self.cache.borrow_mut().write_word(address, val);
-                         match result {
-                             Ok(()) => (),
-                             Err(MemoryError::CacheMiss {..}) => return,
-                             Err(MemoryError::InvalidAddress) => {
-                                 self.trap(Trap::IllegalWrite {
-                                     address: pc,
-                                     instruction: inst,
-                                     memory_address: address,
-                                     memory_value: val,
-                                 })
-                             }
-                         }
-                    }
+                } {
+                    self.registers.write_word(inst.rd(), value);
+                }
+            },
+            isa::opcodes::INTEGER_REGISTER => {
+                let src1 = self.registers.read_word(inst.rs1());
+                let src2 = self.registers.read_word(inst.rs2());
+                let src2_shift = src2 & 0x1F;
+                if let Some(value) = match inst.funct3() {
+                    isa::funct3::ADD_SUB => {
+                        match inst.funct7() {
+                            isa::funct7::ADD_SRL => Some(((src1 as isa::SignedWord).wrapping_add(src2 as isa::SignedWord)) as isa::Word),
+                            isa::funct7::SUB_SRA => Some(((src1 as isa::SignedWord).wrapping_sub(src2 as isa::SignedWord)) as isa::Word),
+                            _ => {
+                                self.trap(Trap::IllegalInstruction {
+                                    address: pc,
+                                    instruction: inst,
+                                });
+                                None
+                            }
+                        }
+                    },
+                    isa::funct3::SLL => {
+                        Some(src1 << src2_shift)
+                    },
+                    isa::funct3::SLT => {
+                        if (src1 as isa::SignedWord) < (src2 as isa::SignedWord) {
+                            Some(1)
+                        }
+                        else {
+                            Some(0)
+                        }
+                    },
+                    isa::funct3::SLTU => {
+                        if src1 < src2 {
+                            Some(1)
+                        }
+                        else {
+                            Some(0)
+                        }
+                    },
+                    isa::funct3::XOR => {
+                        Some(src1 ^ src2)
+                    },
+                    isa::funct3::SRL_SRA => {
+                        match inst.funct7() {
+                            isa::funct7::ADD_SRL => Some(src1 >> src2_shift),
+                            isa::funct7::SUB_SRA => Some(((src1 as isa::SignedWord) >> src2_shift) as isa::Word),
+                            _ => {
+                                self.trap(Trap::IllegalInstruction {
+                                    address: pc,
+                                    instruction: inst,
+                                });
+                                None
+                            }
+                        }
+                    },
+                    isa::funct3::OR => {
+                        Some(src1 | src2)
+                    },
+                    isa::funct3::AND => {
+                        Some(src1 & src2)
+                    },
                     _ => {
-                        panic!("Invalid store funct3code: 0x{:x}", inst.funct3());
+                        self.trap(Trap::IllegalInstruction {
+                            address: pc,
+                            instruction: inst,
+                        });
+                        None
                     }
-                },
-                isa::opcodes::SYSTEM => match inst.i_imm() {
-                    0x0 => {
-                        // System call
-                        println!("System call {}:", self.registers.read_word(isa::Register::X10));
-                        let address = self.registers.read_word(isa::Register::X11);
-                        println!("Argument {:X}: {:?}", address, self.cache.borrow_mut().read_word(address));
-                    }
-                    _ => {
-
+                } {
+                    self.registers.write_word(inst.rd(), value);
+                }
+            },
+            isa::opcodes::LOAD => match inst.funct3() {
+                isa::funct3::LW => {
+                    let imm = inst.i_imm();
+                    let base = self.registers.read_word(inst.rs1());
+                    let address = ((base as isa::SignedWord) + imm) as isa::Address;
+                    let result = self.cache.borrow_mut().read_word(address);
+                    match result {
+                        Ok(value) =>
+                            self.registers.write_word(inst.rd(), value),
+                        Err(MemoryError::CacheMiss {..}) => return,
+                        Err(MemoryError::InvalidAddress) => {
+                            self.trap(Trap::IllegalRead {
+                                address: pc,
+                                instruction: inst,
+                                memory_address: address,
+                            });
+                        }
                     }
                 },
                 _ => {
-                    panic!("Invalid opcode: 0x{:02X} at PC 0x{:X}", inst.opcode(), pc);
+                    panic!("Invalid load funct3code: 0x{:x}", inst.funct3());
                 }
+            },
+            isa::opcodes::STORE => match inst.funct3() {
+                isa::funct3::SW => {
+                    let imm = inst.s_imm();
+                    let base = self.registers.read_word(inst.rs1());
+                    let val = self.registers.read_word(inst.rs2());
+                    let address = ((base as isa::SignedWord) + imm) as isa::Address;
+                    let result = self.cache.borrow_mut().write_word(address, val);
+                    match result {
+                        Ok(()) => (),
+                        Err(MemoryError::CacheMiss {..}) => return,
+                        Err(MemoryError::InvalidAddress) => {
+                            self.trap(Trap::IllegalWrite {
+                                address: pc,
+                                instruction: inst,
+                                memory_address: address,
+                                memory_value: val,
+                            })
+                        }
+                    }
+                }
+                _ => {
+                    panic!("Invalid store funct3code: 0x{:x}", inst.funct3());
+                }
+            },
+            isa::opcodes::SYSTEM => match inst.i_imm() {
+                0x0 => {
+                    // System call
+                    println!("System call {}:", self.registers.read_word(isa::Register::X10));
+                }
+                _ => {
+
+                }
+            },
+            _ => {
+                panic!("Invalid opcode: 0x{:02X} at PC 0x{:X}", inst.opcode(), pc);
             }
-        }
-        else {
-            // trap
         }
         self.pc += 4;
     }
@@ -363,7 +356,12 @@ impl<'a> Simulator<'a> {
                     continue;
                 }
                 let inst = self.memory.borrow_mut().read_instruction(core.pc);
-                core.step(inst);
+                if let Some(inst) = inst {
+                    core.step(inst);
+                }
+                else {
+                    // TODO: trap
+                }
                 ran = true;
             }
             if !ran {
