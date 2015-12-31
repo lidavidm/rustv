@@ -20,7 +20,7 @@ use std::cell::RefCell;
 use isa::{self, Instruction};
 use binary::{Binary};
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum MemoryError {
     InvalidAddress,
     CacheMiss {
@@ -32,6 +32,8 @@ pub type Result<T> = ::std::result::Result<T, MemoryError>;
 
 pub trait MemoryInterface {
     fn latency(&self) -> u32;
+
+    fn step(&mut self);
 
     fn read_word(&mut self, address: isa::Address) -> Result<isa::Word>;
     fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Result<()>;
@@ -50,6 +52,7 @@ pub trait MemoryInterface {
     // fn write_byte(&self, address: isa::Address) -> Result<()>;
 }
 
+// TODO: should be a trait
 pub struct Mmu<T: MemoryInterface> {
     memory: T,
 }
@@ -59,10 +62,19 @@ pub struct Memory {
 }
 
 #[derive(Clone)]
+enum FetchStage {
+    CurrentLevel,
+    NextLevel,
+}
+
+#[derive(Clone)]
 struct FetchRequest {
     address: isa::Address,
     prefetch: bool,
     cycles_left: u32,
+    stage: FetchStage,
+    data: Vec<u32>, // hold data temporarily while we wait for an entire line
+    error: Option<MemoryError>, // in case next level returns an error
 }
 
 #[derive(Clone)]
@@ -108,6 +120,8 @@ impl MemoryInterface for Memory {
     fn latency(&self) -> u32 {
         100
     }
+
+    fn step(&mut self) {}
 
     fn read_word(&mut self, address: isa::Address) -> Result<isa::Word> {
         // memory is word-addressed but addresses are byte-addressed
@@ -184,9 +198,47 @@ impl MemoryInterface for DirectMappedCache {
         100
     }
 
+    fn step(&mut self) {
+        for set in self.cache.iter_mut() {
+            if let Some(ref mut fetch_request) = set.fetch_request {
+                if fetch_request.cycles_left > 0 {
+                    fetch_request.cycles_left -= 1;
+                }
+                else {
+                    // read all the words in a line from the next
+                    // level, until we get a stall
+
+                    // TODO: need to keep track of what words we already got
+                    for offset in 0..self.block_words {
+                        let result = self.next_level
+                            .borrow_mut()
+                            .read_word(fetch_request.address + (4 * offset));
+                        match result {
+                            Ok(data) => {
+                                fetch_request.data[offset as usize] = data;
+                            },
+                            Err(MemoryError::CacheMiss { stall_cycles }) => {
+                                fetch_request.cycles_left = stall_cycles;
+                                return;
+                            },
+                            Err(MemoryError::InvalidAddress) => {
+                                fetch_request.error =
+                                    Some(MemoryError::InvalidAddress);
+                                return;
+                            }
+                        }
+                    }
+                    // TODO: need to move request to next level once
+                    // done (i.e. write to cache and remove fetch
+                    // request)
+                }
+            }
+        }
+    }
+
     fn read_word(&mut self, address: isa::Address) -> Result<isa::Word> {
         let normalized = self.normalize_address(address);
-        let stall = self.latency() + self.next_level.borrow().latency();
+        let stall = self.latency();
         let (tag, index, offset) = self.parse_address(address);
         let ref mut set = self.cache[index as usize];
         if set.tag == tag {
@@ -197,9 +249,15 @@ impl MemoryInterface for DirectMappedCache {
                 address: normalized,
                 prefetch: false,
                 cycles_left: stall,
+                stage: FetchStage::CurrentLevel,
+                data: vec![0, self.block_words],
+                error: None,
             })
         }
         else if let Some(ref fetch_request) = set.fetch_request {
+            if let Some(ref err) = fetch_request.error {
+                return Err(err.clone());
+            }
             return Err(MemoryError::CacheMiss {
                 stall_cycles: fetch_request.cycles_left
             });
