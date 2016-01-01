@@ -28,6 +28,7 @@ pub struct Core<'a> {
     pc: isa::Address,
     registers: RegisterFile,
     running: bool,
+    // TODO: change to memory::SharedMemory
     cache: Rc<RefCell<Box<MemoryInterface + 'a>>>,
 }
 

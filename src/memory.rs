@@ -52,6 +52,8 @@ pub trait MemoryInterface {
     // fn write_byte(&self, address: isa::Address) -> Result<()>;
 }
 
+pub type SharedMemory = Rc<RefCell<MemoryInterface>>;
+
 // TODO: should be a trait
 pub struct Mmu<T: MemoryInterface> {
     memory: T,
@@ -62,19 +64,14 @@ pub struct Memory {
 }
 
 #[derive(Clone)]
-enum FetchStage {
-    CurrentLevel,
-    NextLevel,
-}
-
-#[derive(Clone)]
 struct FetchRequest {
     address: isa::Address,
-    prefetch: bool,
+    prefetch: bool, // is this a prefetch
     cycles_left: u32,
-    stage: FetchStage,
+    tag: u32,
     data: Vec<u32>, // hold data temporarily while we wait for an entire line
     error: Option<MemoryError>, // in case next level returns an error
+    waiting_on: u32, // which word of the block are we waiting on
 }
 
 #[derive(Clone)]
@@ -93,7 +90,7 @@ pub struct DirectMappedCache {
     num_sets: u32,
     block_words: u32,
     cache: Vec<CacheBlock>,
-    next_level: Rc<RefCell<MemoryInterface>>,
+    next_level: SharedMemory,
 }
 
 impl Memory {
@@ -150,7 +147,7 @@ impl MemoryInterface for Memory {
 }
 
 impl DirectMappedCache {
-    pub fn new(sets: u32, block_words: u32, next_level: Rc<RefCell<MemoryInterface>>)
+    pub fn new(sets: u32, block_words: u32, next_level: SharedMemory)
                -> DirectMappedCache {
         let set = CacheBlock {
             valid: false,
@@ -203,45 +200,51 @@ impl MemoryInterface for DirectMappedCache {
             if let Some(ref mut fetch_request) = set.fetch_request {
                 if fetch_request.cycles_left > 0 {
                     fetch_request.cycles_left -= 1;
+                    continue;
                 }
                 else {
                     // read all the words in a line from the next
                     // level, until we get a stall
 
-                    // TODO: need to keep track of what words we already got
-                    for offset in 0..self.block_words {
+                    for offset in fetch_request.waiting_on..self.block_words {
                         let result = self.next_level
                             .borrow_mut()
                             .read_word(fetch_request.address + (4 * offset));
                         match result {
                             Ok(data) => {
                                 fetch_request.data[offset as usize] = data;
+                                fetch_request.waiting_on += 1;
                             },
                             Err(MemoryError::CacheMiss { stall_cycles }) => {
                                 fetch_request.cycles_left = stall_cycles;
-                                return;
+                                continue;
                             },
                             Err(MemoryError::InvalidAddress) => {
                                 fetch_request.error =
                                     Some(MemoryError::InvalidAddress);
-                                return;
+                                continue;
                             }
                         }
                     }
-                    // TODO: need to move request to next level once
-                    // done (i.e. write to cache and remove fetch
-                    // request)
+
+                    // All words fetched, write to cache
+                    set.tag = fetch_request.tag;
+                    set.contents = fetch_request.data.clone();
+                    set.valid = true;
                 }
             }
+
+            set.fetch_request = None;
         }
     }
 
     fn read_word(&mut self, address: isa::Address) -> Result<isa::Word> {
         let normalized = self.normalize_address(address);
+        let (new_tag, _, _) = self.parse_address(address);
         let stall = self.latency();
         let (tag, index, offset) = self.parse_address(address);
         let ref mut set = self.cache[index as usize];
-        if set.tag == tag {
+        if set.valid && set.tag == tag {
             return Ok(set.contents[(offset / 4) as usize]);
         }
         else if let None = set.fetch_request {
@@ -249,13 +252,17 @@ impl MemoryInterface for DirectMappedCache {
                 address: normalized,
                 prefetch: false,
                 cycles_left: stall,
-                stage: FetchStage::CurrentLevel,
+                tag: new_tag,
                 data: vec![0, self.block_words],
                 error: None,
+                waiting_on: 0,
             })
         }
         else if let Some(ref fetch_request) = set.fetch_request {
             if let Some(ref err) = fetch_request.error {
+                // TODO: check to make sure the fetch request is for
+                // this address, else just clear the request
+                // TODO: clear the fetch request
                 return Err(err.clone());
             }
             return Err(MemoryError::CacheMiss {
