@@ -27,6 +27,7 @@ struct RegisterFile {
 pub struct Core<'a> {
     pc: isa::Address,
     registers: RegisterFile,
+    stall: u32,
     running: bool,
     // TODO: change to memory::SharedMemory
     cache: Rc<RefCell<Box<MemoryInterface + 'a>>>,
@@ -81,6 +82,7 @@ impl<'a> Core<'a> {
         Core {
             pc: 0x1002c, // TODO: hardcoded: fix later
             registers: RegisterFile::new(),
+            stall: 0,
             running: true,
             cache: cache,
         }
@@ -88,6 +90,12 @@ impl<'a> Core<'a> {
 
     fn step(&mut self, inst: isa::Instruction) {
         let pc = self.pc;
+
+        if self.stall > 0 {
+            self.stall -= 1;
+            return;
+        }
+
         match inst.opcode() {
             isa::opcodes::JALR => {
                 // TODO: assert funct3 is 0
@@ -273,7 +281,10 @@ impl<'a> Core<'a> {
                     match result {
                         Ok(value) =>
                             self.registers.write_word(inst.rd(), value),
-                        Err(MemoryError::CacheMiss {..}) => return,
+                        Err(MemoryError::CacheMiss { stall_cycles }) => {
+                            self.stall = stall_cycles;
+                            return;
+                        },
                         Err(MemoryError::InvalidAddress) => {
                             self.trap(Trap::IllegalRead {
                                 address: pc,
@@ -296,7 +307,10 @@ impl<'a> Core<'a> {
                     let result = self.cache.borrow_mut().write_word(address, val);
                     match result {
                         Ok(()) => (),
-                        Err(MemoryError::CacheMiss {..}) => return,
+                        Err(MemoryError::CacheMiss { stall_cycles }) => {
+                            self.stall = stall_cycles;
+                            return;
+                        },
                         Err(MemoryError::InvalidAddress) => {
                             self.trap(Trap::IllegalWrite {
                                 address: pc,
@@ -350,12 +364,16 @@ impl<'a> Simulator<'a> {
         self.cores[0].registers.write_word(isa::Register::X3, 0x108D0);
         // hardcode SP
         self.cores[0].registers.write_word(isa::Register::X2, 0x7FFC);
+        let mut total_cycles = 0;
+        let mut stall_cycles = 0;
         loop {
             let mut ran = false;
+            total_cycles += 1;
             for core in self.cores.iter_mut() {
                 if !core.running {
                     continue;
                 }
+                if core.stall > 0 { stall_cycles += 1; }
                 let inst = self.memory.borrow_mut().read_instruction(core.pc);
                 if let Some(inst) = inst {
                     core.step(inst);
@@ -363,10 +381,13 @@ impl<'a> Simulator<'a> {
                 else {
                     // TODO: trap
                 }
+
+                core.cache.borrow_mut().step();
                 ran = true;
             }
             if !ran {
                 println!("All cores are not running, stopping...");
+                println!("Stalled cycles: {} of {}", stall_cycles, total_cycles);
                 break;
             }
         }

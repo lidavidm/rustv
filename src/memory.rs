@@ -52,7 +52,7 @@ pub trait MemoryInterface {
     // fn write_byte(&self, address: isa::Address) -> Result<()>;
 }
 
-pub type SharedMemory = Rc<RefCell<MemoryInterface>>;
+pub type SharedMemory<'a> = Rc<RefCell<Box<MemoryInterface + 'a>>>;
 
 // TODO: should be a trait
 pub struct Mmu<T: MemoryInterface> {
@@ -86,11 +86,11 @@ struct CacheBlock {
 // investigate how LRU is implemented
 // TODO: use hashtable for a way?
 // TODO: hashtable-based FA cache?
-pub struct DirectMappedCache {
+pub struct DirectMappedCache<'a> {
     num_sets: u32,
     block_words: u32,
     cache: Vec<CacheBlock>,
-    next_level: SharedMemory,
+    next_level: SharedMemory<'a>,
 }
 
 impl Memory {
@@ -146,9 +146,9 @@ impl MemoryInterface for Memory {
     }
 }
 
-impl DirectMappedCache {
-    pub fn new(sets: u32, block_words: u32, next_level: SharedMemory)
-               -> DirectMappedCache {
+impl<'a> DirectMappedCache<'a> {
+    pub fn new(sets: u32, block_words: u32, next_level: SharedMemory<'a>)
+               -> DirectMappedCache<'a> {
         let set = CacheBlock {
             valid: false,
             tag: 0,
@@ -190,7 +190,7 @@ impl DirectMappedCache {
     }
 }
 
-impl MemoryInterface for DirectMappedCache {
+impl<'a> MemoryInterface for DirectMappedCache<'a> {
     fn latency(&self) -> u32 {
         100
     }
@@ -254,7 +254,7 @@ impl MemoryInterface for DirectMappedCache {
                 prefetch: false,
                 cycles_left: stall,
                 tag: new_tag,
-                data: vec![0, self.block_words],
+                data: vec![0; self.block_words as usize],
                 error: None,
                 waiting_on: 0,
             });

@@ -30,7 +30,8 @@ fn it_works() {
         Ok(b) => {
             let memory = memory::Memory::new_from_binary(0x2000, b);
             let memory_ref = Rc::new(RefCell::new(Box::new(memory) as Box<memory::MemoryInterface>));
-            let core = simulator::Core::new(memory_ref.clone());
+            let cache = Rc::new( RefCell::new( Box::new( memory::DirectMappedCache::new(4, 4, memory_ref.clone())) as Box<memory::MemoryInterface>) );
+            let core = simulator::Core::new(cache.clone());
             let mut simulator = simulator::Simulator::new(vec![core], memory_ref.clone());
             simulator.run();
         },
@@ -47,7 +48,7 @@ mod tests {
         use std::cell::RefCell;
 
         let memory = Memory::new(16);
-        let memory_ref = Rc::new(RefCell::new(memory));
+        let memory_ref = Rc::new(RefCell::new(Box::new(memory) as Box<MemoryInterface>));
         let dm_cache_word = DirectMappedCache::new(4, 1, memory_ref.clone());
         let dm_cache_doubleword = DirectMappedCache::new(4, 2, memory_ref.clone());
 
