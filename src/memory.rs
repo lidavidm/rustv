@@ -244,6 +244,7 @@ impl MemoryInterface for DirectMappedCache {
         let stall = self.latency();
         let (tag, index, offset) = self.parse_address(address);
         let ref mut set = self.cache[index as usize];
+
         if set.valid && set.tag == tag {
             return Ok(set.contents[(offset / 4) as usize]);
         }
@@ -256,19 +257,29 @@ impl MemoryInterface for DirectMappedCache {
                 data: vec![0, self.block_words],
                 error: None,
                 waiting_on: 0,
-            })
+            });
         }
-        else if let Some(ref fetch_request) = set.fetch_request {
+        else if let Some(ref mut fetch_request) = set.fetch_request {
             if let Some(ref err) = fetch_request.error {
-                // TODO: check to make sure the fetch request is for
-                // this address, else just clear the request
-                // TODO: clear the fetch request
-                return Err(err.clone());
+                if fetch_request.address == normalized {
+                    return Err(err.clone());
+                }
+                else {
+                    fetch_request.address = normalized;
+                    fetch_request.prefetch = false;
+                    fetch_request.cycles_left = stall;
+                    fetch_request.tag = new_tag;
+                    fetch_request.waiting_on = 0;
+                }
             }
+            // Do the assignment outside the borrow of the error
+            fetch_request.error = None;
+
             return Err(MemoryError::CacheMiss {
                 stall_cycles: fetch_request.cycles_left
             });
         }
+
         Err(MemoryError::CacheMiss {
             stall_cycles: stall,
         })
