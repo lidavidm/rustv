@@ -54,9 +54,8 @@ pub trait MemoryInterface {
 
 pub type SharedMemory<'a> = Rc<RefCell<Box<MemoryInterface + 'a>>>;
 
-// TODO: should be a trait
-pub struct Mmu<T: MemoryInterface> {
-    memory: T,
+pub trait Mmu {
+    fn translate(address: isa::Address) -> isa::Address;
 }
 
 pub struct Memory {
