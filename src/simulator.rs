@@ -1,4 +1,4 @@
-// Copyright 2015 David Li
+// Copyright 2016 David Li
 // This file is part of rustv.
 
 // rustv is free software: you can redistribute it and/or modify
@@ -14,11 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
-use std::cell::RefCell;
-use std::rc::Rc;
-
 use isa;
-use memory::{MemoryInterface, MemoryError};
+use memory::{MemoryInterface, MemoryError, SharedMemory};
 
 struct RegisterFile {
     registers: [isa::Word; 32],
@@ -29,13 +26,12 @@ pub struct Core<'a> {
     registers: RegisterFile,
     stall: u32,
     running: bool,
-    // TODO: change to memory::SharedMemory
-    cache: Rc<RefCell<Box<MemoryInterface + 'a>>>,
+    cache: SharedMemory<'a>,
 }
 
 pub struct Simulator<'a> {
     cores: Vec<Core<'a>>,
-    memory: Rc<RefCell<Box<MemoryInterface + 'a>>>,
+    memory: SharedMemory<'a>,
 }
 
 #[derive(Debug)]
@@ -78,7 +74,7 @@ impl RegisterFile {
 
 impl<'a> Core<'a> {
     // TODO: take Rc<RefCell<>> to Memory as well?
-    pub fn new(cache: Rc<RefCell<Box<MemoryInterface + 'a>>>) -> Core<'a> {
+    pub fn new(cache: SharedMemory<'a>) -> Core<'a> {
         Core {
             pc: 0x1002c, // TODO: hardcoded: fix later
             registers: RegisterFile::new(),
@@ -348,7 +344,8 @@ impl<'a> Core<'a> {
 }
 
 impl<'a> Simulator<'a> {
-    pub fn new(cores: Vec<Core<'a>>, memory: Rc<RefCell<Box<MemoryInterface + 'a>>>) -> Simulator<'a> {
+    pub fn new(cores: Vec<Core<'a>>, memory: SharedMemory<'a>)
+               -> Simulator<'a> {
         // TODO: pass in GP, SP, _start
         // TODO: initialize GP, registers (GP is in headers)
         Simulator {
