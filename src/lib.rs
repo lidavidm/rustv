@@ -88,19 +88,24 @@ mod tests {
         assert_eq!(memory.read_byte(0x12), Ok(0x23));
         assert_eq!(memory.read_byte(0x13), Ok(0x01));
 
-        let stall = memory.latency();
+        let stall = Err(MemoryError::CacheMiss {
+            stall_cycles: memory.latency(),
+        });
+        let write_stall = Err(MemoryError::CacheMiss {
+            stall_cycles: memory.latency(),
+        });
+
         let memory_box = Box::new(memory) as Box<MemoryInterface>;
         let memory_ref = Rc::new(RefCell::new(memory_box));
         let mut dm_cache = DirectMappedCache::new(4, 4, memory_ref.clone());
 
-        assert_eq!(dm_cache.read_word(0x10), Err(MemoryError::CacheMiss {
-            stall_cycles: stall,
-        }));
+        assert_eq!(dm_cache.read_word(0x10), stall);
 
         for _ in 0..100 {
             dm_cache.step();
         }
 
+        assert_eq!(dm_cache.write_word(0x20, 0x123), write_stall);
         assert_eq!(dm_cache.read_word(0x10), Ok(0x01234567));
         assert_eq!(dm_cache.read_word(0x14), Ok(0xDEADBEEF));
         assert_eq!(dm_cache.read_word(0x18), Ok(0xF0));
@@ -112,5 +117,17 @@ mod tests {
         assert_eq!(dm_cache.write_word(0x18, 0xBEEFBEEF), Ok(()));
         assert_eq!(dm_cache.read_word(0x18), Ok(0xBEEFBEEF));
         assert_eq!(memory_ref.borrow_mut().read_word(0x18), Ok(0xBEEFBEEF));
+
+        for _ in 0..100 {
+            dm_cache.step();
+        }
+
+        assert_eq!(dm_cache.write_word(0x20, 0x123), Ok(()));
+        assert_eq!(memory_ref.borrow_mut().read_word(0x20), Ok(0x123));
+        // Should not have been evicted
+        assert_eq!(dm_cache.read_word(0x10), Ok(0x01234567));
+        assert_eq!(dm_cache.read_word(0x14), Ok(0xDEADBEEF));
+        assert_eq!(dm_cache.read_word(0x18), Ok(0xBEEFBEEF));
+        assert_eq!(dm_cache.read_word(0x1C), Ok(0xF0));
     }
 }
