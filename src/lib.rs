@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
-#![feature(step_by)]
+#![feature(braced_empty_structs, step_by)]
 pub mod isa;
 pub mod binary;
 pub mod memory;
@@ -28,10 +28,11 @@ fn it_works() {
     use std::path::Path;
     match binary::Binary::new_from_hex_file(Path::new("../riscv/kernel.hex")) {
         Ok(b) => {
+            let mmu = memory::IdentityMmu::new();
             let memory = memory::Memory::new_from_binary(0x2000, b);
             let memory_ref = Rc::new(RefCell::new(Box::new(memory) as Box<memory::MemoryInterface>));
             let cache = Rc::new( RefCell::new( Box::new( memory::DirectMappedCache::new(4, 4, memory_ref.clone())) as Box<memory::MemoryInterface>) );
-            let core = simulator::Core::new(cache.clone());
+            let core = simulator::Core::new(cache.clone(), Box::new(mmu));
             let mut simulator = simulator::Simulator::new(vec![core], memory_ref.clone());
             simulator.run();
         },

@@ -89,7 +89,38 @@ pub trait MemoryInterface {
 pub type SharedMemory<'a> = Rc<RefCell<Box<MemoryInterface + 'a>>>;
 
 pub trait Mmu {
-    fn translate(address: isa::Address) -> isa::Address;
+    fn translate(&self, address: isa::Address) -> isa::Address;
+}
+
+pub struct IdentityMmu {}
+pub struct ReverseMmu {
+    top: isa::Address,
+}
+
+impl IdentityMmu {
+    pub fn new() -> IdentityMmu {
+        IdentityMmu {}
+    }
+}
+
+impl Mmu for IdentityMmu {
+    fn translate(&self, address: isa::Address) -> isa::Address {
+        address
+    }
+}
+
+impl ReverseMmu {
+    pub fn new(top: isa::Address) -> ReverseMmu {
+        ReverseMmu {
+            top: top,
+        }
+    }
+}
+
+impl Mmu for ReverseMmu {
+    fn translate(&self, address: isa::Address) -> isa::Address {
+        self.top - address
+    }
 }
 
 pub struct Memory {

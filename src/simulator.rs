@@ -15,18 +15,19 @@
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
 use isa;
-use memory::{MemoryInterface, MemoryError, SharedMemory};
+use memory::{MemoryInterface, MemoryError, Mmu, SharedMemory};
 
 struct RegisterFile {
     registers: [isa::Word; 32],
 }
 
-pub struct Core<'a> {
+pub struct Core<'a>{
     pc: isa::Address,
     registers: RegisterFile,
     stall: u32,
     running: bool,
     cache: SharedMemory<'a>,
+    mmu: Box<Mmu + 'a>,
 }
 
 pub struct Simulator<'a> {
@@ -74,13 +75,14 @@ impl RegisterFile {
 
 impl<'a> Core<'a> {
     // TODO: take Rc<RefCell<>> to Memory as well?
-    pub fn new(cache: SharedMemory<'a>) -> Core<'a> {
+    pub fn new(cache: SharedMemory<'a>, mmu: Box<Mmu + 'a>) -> Core<'a> {
         Core {
             pc: 0x1002c, // TODO: hardcoded: fix later
             registers: RegisterFile::new(),
             stall: 0,
             running: true,
             cache: cache,
+            mmu: mmu,
         }
     }
 
@@ -273,6 +275,8 @@ impl<'a> Core<'a> {
                     let imm = inst.i_imm();
                     let base = self.registers.read_word(inst.rs1());
                     let address = ((base as isa::SignedWord) + imm) as isa::Address;
+                    let address = self.mmu.translate(address);
+
                     let result = self.cache.borrow_mut().read_word(address);
                     match result {
                         Ok(value) =>
@@ -300,6 +304,8 @@ impl<'a> Core<'a> {
                     let base = self.registers.read_word(inst.rs1());
                     let val = self.registers.read_word(inst.rs2());
                     let address = ((base as isa::SignedWord) + imm) as isa::Address;
+                    let address = self.mmu.translate(address);
+
                     let result = self.cache.borrow_mut().write_word(address, val);
                     match result {
                         Ok(()) => (),
@@ -371,7 +377,11 @@ impl<'a> Simulator<'a> {
                     continue;
                 }
                 if core.stall > 0 { stall_cycles += 1; }
-                let inst = self.memory.borrow_mut().read_instruction(core.pc);
+
+                let pc = core.pc;
+                let pc = core.mmu.translate(pc);
+                let inst = self.memory.borrow_mut().read_instruction(pc);
+
                 if let Some(inst) = inst {
                     core.step(inst);
                 }
