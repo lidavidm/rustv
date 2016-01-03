@@ -60,7 +60,10 @@ mod tests {
 
     #[test]
     fn memory_rw() {
+        use std::rc::Rc;
+        use std::cell::RefCell;
         use memory::*;
+
         let size = 0xFF;
         let mut memory = Memory::new(size);
 
@@ -77,5 +80,37 @@ mod tests {
             assert_eq!(memory.write_word(address, 0xF0), Ok(()));
             assert_eq!(memory.read_word(address), Ok(0xF0));
         }
+
+        assert_eq!(memory.write_word(0x10, 0x01234567), Ok(()));
+        assert_eq!(memory.write_word(0x14, 0xDEADBEEF), Ok(()));
+        assert_eq!(memory.read_byte(0x10), Ok(0x67));
+        assert_eq!(memory.read_byte(0x11), Ok(0x45));
+        assert_eq!(memory.read_byte(0x12), Ok(0x23));
+        assert_eq!(memory.read_byte(0x13), Ok(0x01));
+
+        let stall = memory.latency();
+        let memory_box = Box::new(memory) as Box<MemoryInterface>;
+        let memory_ref = Rc::new(RefCell::new(memory_box));
+        let mut dm_cache = DirectMappedCache::new(4, 4, memory_ref.clone());
+
+        assert_eq!(dm_cache.read_word(0x10), Err(MemoryError::CacheMiss {
+            stall_cycles: stall,
+        }));
+
+        for _ in 0..100 {
+            dm_cache.step();
+        }
+
+        assert_eq!(dm_cache.read_word(0x10), Ok(0x01234567));
+        assert_eq!(dm_cache.read_word(0x14), Ok(0xDEADBEEF));
+        assert_eq!(dm_cache.read_word(0x18), Ok(0xF0));
+        assert_eq!(dm_cache.read_word(0x1C), Ok(0xF0));
+        assert_eq!(dm_cache.read_byte(0x10), Ok(0x67));
+        assert_eq!(dm_cache.read_byte(0x11), Ok(0x45));
+        assert_eq!(dm_cache.read_byte(0x12), Ok(0x23));
+        assert_eq!(dm_cache.read_byte(0x13), Ok(0x01));
+        assert_eq!(dm_cache.write_word(0x18, 0xBEEFBEEF), Ok(()));
+        assert_eq!(dm_cache.read_word(0x18), Ok(0xBEEFBEEF));
+        assert_eq!(memory_ref.borrow_mut().read_word(0x18), Ok(0xBEEFBEEF));
     }
 }
