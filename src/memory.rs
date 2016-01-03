@@ -55,9 +55,9 @@ pub trait MemoryInterface {
         match result {
             Ok(word) => match offset {
                 0 => Ok((word & 0xFF) as isa::Byte),
-                1 => Ok((word & 0xFF00) as isa::Byte),
-                2 => Ok((word & 0xFF0000) as isa::Byte),
-                3 => Ok((word & 0xFF000000) as isa::Byte),
+                1 => Ok(((word & 0xFF00) >> 8) as isa::Byte),
+                2 => Ok(((word & 0xFF0000) >> 16) as isa::Byte),
+                3 => Ok(((word & 0xFF000000) >> 24) as isa::Byte),
                 _ => panic!(""),
             },
             Err(e) => Err(e),
@@ -233,38 +233,35 @@ impl<'a> MemoryInterface for DirectMappedCache<'a> {
             if let Some(ref mut fetch_request) = set.fetch_request {
                 if fetch_request.cycles_left > 0 {
                     fetch_request.cycles_left -= 1;
-                    continue;
                 }
-                else {
-                    // read all the words in a line from the next
-                    // level, until we get a stall
+                // read all the words in a line from the next
+                // level, until we get a stall
 
-                    for offset in fetch_request.waiting_on..self.block_words {
-                        let result = self.next_level
-                            .borrow_mut()
-                            .read_word(fetch_request.address + (4 * offset));
-                        match result {
-                            Ok(data) => {
-                                fetch_request.data[offset as usize] = data;
-                                fetch_request.waiting_on += 1;
-                            },
-                            Err(MemoryError::CacheMiss { stall_cycles }) => {
-                                fetch_request.cycles_left = stall_cycles;
-                                continue;
-                            },
-                            Err(MemoryError::InvalidAddress) => {
-                                fetch_request.error =
-                                    Some(MemoryError::InvalidAddress);
-                                continue;
-                            }
+                for offset in fetch_request.waiting_on..self.block_words {
+                    let result = self.next_level
+                        .borrow_mut()
+                        .read_word(fetch_request.address + (4 * offset));
+                    match result {
+                        Ok(data) => {
+                            fetch_request.data[offset as usize] = data;
+                            fetch_request.waiting_on += 1;
+                        },
+                        Err(MemoryError::CacheMiss { stall_cycles }) => {
+                            fetch_request.cycles_left = stall_cycles;
+                            continue;
+                        },
+                        Err(MemoryError::InvalidAddress) => {
+                            fetch_request.error =
+                                Some(MemoryError::InvalidAddress);
+                            continue;
                         }
                     }
-
-                    // All words fetched, write to cache
-                    set.tag = fetch_request.tag;
-                    set.contents = fetch_request.data.clone();
-                    set.valid = true;
                 }
+
+                // All words fetched, write to cache
+                set.tag = fetch_request.tag;
+                set.contents = fetch_request.data.clone();
+                set.valid = true;
             }
 
             set.fetch_request = None;
@@ -323,10 +320,21 @@ impl<'a> MemoryInterface for DirectMappedCache<'a> {
         // Write-allocate policy
         match self.read_word(address) {
             Ok(_) => {
-                // Write-through policy
-                match self.next_level.borrow_mut().write_word(address, value) {
-                    Ok(()) => Ok(()),
-                    Err(e) => Err(e),
+                let (tag, index, offset) = self.parse_address(address);
+                let ref mut set = self.cache[index as usize];
+
+                if set.valid && set.tag == tag {
+                    set.contents[(offset / 4) as usize] = value;
+                    // Write-through policy
+                    let result = self.next_level.borrow_mut()
+                        .write_word(address, value);
+                    match result {
+                        Ok(()) => Ok(()),
+                        Err(e) => Err(e),
+                    }
+                }
+                else {
+                    panic!("Could not find supposedly read word");
                 }
             },
             Err(e) => Err(e),
