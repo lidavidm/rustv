@@ -48,8 +48,43 @@ pub trait MemoryInterface {
     // fn read_halfword(&self, address: isa::Address) -> Result<isa::HalfWord>;
     // fn write_halfword(&self, address: isa::Address) -> Result<()>;
 
-    // fn read_byte(&self, address: isa::Address) -> Result<isa::Byte>;
-    // fn write_byte(&self, address: isa::Address) -> Result<()>;
+    fn read_byte(&mut self, address: isa::Address) -> Result<isa::Byte> {
+        let result = self.read_word(address);
+        let offset = address % 4;
+
+        match result {
+            Ok(word) => match offset {
+                0 => Ok((word & 0xFF) as isa::Byte),
+                1 => Ok((word & 0xFF00) as isa::Byte),
+                2 => Ok((word & 0xFF0000) as isa::Byte),
+                3 => Ok((word & 0xFF000000) as isa::Byte),
+                _ => panic!(""),
+            },
+            Err(e) => Err(e),
+        }
+    }
+
+    fn write_byte(&mut self, address: isa::Address, value: isa::Byte) -> Result<()> {
+        let address = address / 4;
+        let offset = address % 4;
+
+        let result = self.read_word(address);
+        let value = value as isa::Word;
+
+        match result {
+            Ok(word) => {
+                match offset {
+                    0 => (word & !(0xFF)) | value,
+                    1 => (word & !(0xFF00)) | (value << 8),
+                    2 => (word & !(0xFF0000)) | (value << 16),
+                    3 => (word & !(0xFF000000)) | (value << 24),
+                    _ => panic!(""),
+                };
+                Ok(())
+            },
+            Err(e) => Err(e),
+        }
+    }
 }
 
 pub type SharedMemory<'a> = Rc<RefCell<Box<MemoryInterface + 'a>>>;
@@ -191,7 +226,7 @@ impl<'a> DirectMappedCache<'a> {
 
 impl<'a> MemoryInterface for DirectMappedCache<'a> {
     fn latency(&self) -> u32 {
-        100
+        0
     }
 
     fn step(&mut self) {
@@ -240,7 +275,7 @@ impl<'a> MemoryInterface for DirectMappedCache<'a> {
     fn read_word(&mut self, address: isa::Address) -> Result<isa::Word> {
         let normalized = self.normalize_address(address);
         let (new_tag, _, _) = self.parse_address(address);
-        let stall = self.latency();
+        let stall = self.next_level.borrow().latency();
         let (tag, index, offset) = self.parse_address(address);
         let ref mut set = self.cache[index as usize];
 
@@ -286,7 +321,16 @@ impl<'a> MemoryInterface for DirectMappedCache<'a> {
 
     fn write_word(&mut self, address: isa::Address, value: isa::Word)
                   -> Result<()> {
-        // XXX: temporary
-        self.next_level.borrow_mut().write_word(address, value)
+        // Write-allocate policy
+        match self.read_word(address) {
+            Ok(_) => {
+                // Write-through policy
+                match self.next_level.borrow_mut().write_word(address, value) {
+                    Ok(()) => Ok(()),
+                    Err(e) => Err(e),
+                }
+            },
+            Err(e) => Err(e),
+        }
     }
 }
