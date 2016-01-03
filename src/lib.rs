@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
-#![feature(associated_consts)]
+#![feature(step_by)]
 pub mod isa;
 pub mod binary;
 pub mod memory;
@@ -56,5 +56,26 @@ mod tests {
                    (0xFFFFFFF, 3, 1));
         assert_eq!(dm_cache_doubleword.parse_address(0xFFFFFFFD),
                    (0x7FFFFFF, 3, 5));
+    }
+
+    #[test]
+    fn memory_rw() {
+        use memory::*;
+        let size = 0xFF;
+        let mut memory = Memory::new(size);
+
+        assert_eq!(memory.write_word(0, 0xF0),
+                   Err(MemoryError::InvalidAddress));
+        assert_eq!(memory.write_byte(0, 0xF0),
+                   Err(MemoryError::InvalidAddress));
+        assert_eq!(memory.write_byte(1, 0xF0),
+                   Err(MemoryError::InvalidAddress));
+        assert_eq!(memory.write_byte(2, 0xF0),
+                   Err(MemoryError::InvalidAddress));
+
+        for address in (4..size).step_by(4) {
+            assert_eq!(memory.write_word(address, 0xF0), Ok(()));
+            assert_eq!(memory.read_word(address), Ok(0xF0));
+        }
     }
 }

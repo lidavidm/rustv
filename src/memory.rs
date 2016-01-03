@@ -20,7 +20,7 @@ use std::cell::RefCell;
 use isa::{self, Instruction};
 use binary::{Binary};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum MemoryError {
     InvalidAddress,
     CacheMiss {
@@ -65,7 +65,6 @@ pub trait MemoryInterface {
     }
 
     fn write_byte(&mut self, address: isa::Address, value: isa::Byte) -> Result<()> {
-        let address = address / 4;
         let offset = address % 4;
 
         let result = self.read_word(address);
@@ -73,14 +72,14 @@ pub trait MemoryInterface {
 
         match result {
             Ok(word) => {
-                match offset {
+                let value = match offset {
                     0 => (word & !(0xFF)) | value,
                     1 => (word & !(0xFF00)) | (value << 8),
                     2 => (word & !(0xFF0000)) | (value << 16),
                     3 => (word & !(0xFF000000)) | (value << 24),
                     _ => panic!(""),
                 };
-                Ok(())
+                self.write_word(address, value)
             },
             Err(e) => Err(e),
         }
