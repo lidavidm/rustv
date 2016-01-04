@@ -75,9 +75,9 @@ impl RegisterFile {
 
 impl<'a> Core<'a> {
     // TODO: take Rc<RefCell<>> to Memory as well?
-    pub fn new(cache: SharedMemory<'a>, mmu: Box<Mmu + 'a>) -> Core<'a> {
+    pub fn new(entry: isa::Address, cache: SharedMemory<'a>, mmu: Box<Mmu + 'a>) -> Core<'a> {
         Core {
-            pc: 0x1002c, // TODO: hardcoded: fix later
+            pc: entry,
             registers: RegisterFile::new(),
             stall: 0,
             running: true,
@@ -361,10 +361,6 @@ impl<'a> Simulator<'a> {
     }
 
     pub fn run(&mut self) {
-        // hardcode _start
-        self.cores[0].pc = 0x1002C;
-        // hardcode GP
-        self.cores[0].registers.write_word(isa::Register::X3, 0x108D0);
         // hardcode SP
         self.cores[0].registers.write_word(isa::Register::X2, 0x7FFC);
         let mut total_cycles = 0;

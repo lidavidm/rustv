@@ -58,6 +58,10 @@ impl<'s> ElfBinary<'s> {
         None
     }
 
+    pub fn file_header(&self) -> &'s elf::FileHeader {
+        self.header
+    }
+
     /// Print the program headers.
     pub fn print_program_headers(&self) {
         for p in self.program_headers() {

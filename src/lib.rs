@@ -21,29 +21,11 @@ pub mod memory;
 pub mod simulator;
 
 #[test]
-fn it_works() {
-    use std::rc::Rc;
-    use std::cell::RefCell;
-
-    use std::path::Path;
-    match binary::Binary::new_from_hex_file(Path::new("../riscv/kernel.hex")) {
-        Ok(b) => {
-            let mmu = memory::IdentityMmu::new();
-            let memory = memory::Memory::new_from_binary(0x2000, b);
-            let memory_ref = Rc::new(RefCell::new(Box::new(memory) as Box<memory::MemoryInterface>));
-            let cache = Rc::new( RefCell::new( Box::new( memory::DirectMappedCache::new(4, 4, memory_ref.clone())) as Box<memory::MemoryInterface>) );
-            let core = simulator::Core::new(cache.clone(), Box::new(mmu));
-            let mut simulator = simulator::Simulator::new(vec![core], memory_ref.clone());
-            simulator.run();
-        },
-        Err(err) => println!("Error: {:?}", err),
-    }
-}
-
-#[test]
 fn test_elfloader() {
     use std::io::prelude::*;
     use std::fs::File;
+    use std::rc::Rc;
+    use std::cell::RefCell;
     extern crate elfloader;
 
     let mut f = File::open("../riscv/kernel").unwrap();
@@ -52,23 +34,32 @@ fn test_elfloader() {
     f.read_to_end(&mut buffer).unwrap();
 
     let elf = elfloader::ElfBinary::new("test", &buffer).unwrap();
-    println!("HEADERS");
-    for p in elf.program_headers() {
-        println!("{}", p);
-    }
+    let start = elf.file_header().entry as isa::Address;
+
+    let mut text = None;
+    let mut data = None;
     for p in elf.section_headers() {
-        println!("{}", p);
         if p.name.0 == 0x1b {
-            let data = elf.section_data(p);
-            print!("\t");
-            for x in data[0..8].iter() {
-                print!("{:02x}", x);
-            }
-            println!("");
+            text = Some((elf.section_data(p), p.addr));
+        }
+        else if p.name.0 == 0x33 {
+            data = Some((elf.section_data(p), p.addr));
         }
     }
 
-    println!("{:?}", elf);
+    let (text, text_offset) = text.unwrap();
+    let (data, data_offset) = data.unwrap();
+
+    let mmu = memory::IdentityMmu::new();
+    let memory = memory::Memory::new_from_text_and_data(
+        0x8000,
+        text, text_offset as usize,
+        data, data_offset as usize);
+    let memory_ref = Rc::new(RefCell::new(Box::new(memory) as Box<memory::MemoryInterface>));
+    let cache = Rc::new( RefCell::new( Box::new( memory::DirectMappedCache::new(4, 4, memory_ref.clone())) as Box<memory::MemoryInterface>) );
+    let core = simulator::Core::new(start, cache.clone(), Box::new(mmu));
+    let mut simulator = simulator::Simulator::new(vec![core], memory_ref.clone());
+    simulator.run();
 }
 
 #[cfg(test)]
