@@ -2,3 +2,6 @@
 name = "rustv"
 version = "0.1.0"
 authors = ["David Li <li.davidm96@gmail.com>"]
+
+[dependencies.elfloader]
+path = "src/rust-elfloader"
