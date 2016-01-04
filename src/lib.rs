@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
-#![feature(braced_empty_structs, step_by)]
+#![feature(braced_empty_structs, clone_from_slice, raw, step_by)]
 pub mod isa;
 pub mod binary;
 pub mod memory;
@@ -38,6 +38,37 @@ fn it_works() {
         },
         Err(err) => println!("Error: {:?}", err),
     }
+}
+
+#[test]
+fn test_elfloader() {
+    use std::io::prelude::*;
+    use std::fs::File;
+    extern crate elfloader;
+
+    let mut f = File::open("../riscv/kernel").unwrap();
+    let mut buffer = Vec::new();
+
+    f.read_to_end(&mut buffer).unwrap();
+
+    let elf = elfloader::ElfBinary::new("test", &buffer).unwrap();
+    println!("HEADERS");
+    for p in elf.program_headers() {
+        println!("{}", p);
+    }
+    for p in elf.section_headers() {
+        println!("{}", p);
+        if p.name.0 == 0x1b {
+            let data = elf.section_data(p);
+            print!("\t");
+            for x in data[0..8].iter() {
+                print!("{:02x}", x);
+            }
+            println!("");
+        }
+    }
+
+    println!("{:?}", elf);
 }
 
 #[cfg(test)]

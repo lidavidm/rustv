@@ -641,7 +641,7 @@ impl fmt::Display for SectionType {
 /// Wrapper type for SectionFlag
 ///
 #[derive(Copy, Clone, PartialEq)]
-pub struct SectionFlag(pub u64);
+pub struct SectionFlag(pub u32);
 
 /// Empty flags
 pub const SHF_NONE : SectionFlag = SectionFlag(0);
@@ -704,19 +704,19 @@ pub struct SectionHeader {
     /// Section Flags
     pub flags:     SectionFlag,
     /// in-memory address where this section is loaded
-    pub addr:      u64,
+    pub addr:      u32,
     /// Byte-offset into the file where this section starts
-    pub offset:    u64,
+    pub offset:    u32,
     /// Section size in bytes
-    pub size:      u64,
+    pub size:      u32,
     /// Defined by section type
     pub link:      u32,
     /// Defined by section type
     pub info:      u32,
     /// address alignment
-    pub addralign: u64,
+    pub addralign: u32,
     /// size of an entry if section data is an array of entries
-    pub entsize:   u64,
+    pub entsize:   u32,
 }
 
 impl fmt::Display for SectionHeader {
@@ -817,13 +817,13 @@ impl fmt::Display for SymbolVis {
 pub struct Symbol {
     /// Symbol name
     pub name: StrOffset,
+    /// Symbol value
+    pub value: u32,
+    /// Symbol size
+    pub size: u32,
     info: u8,
     other: u8,
     section_index: u16,
-    /// Symbol value
-    pub value: u64,
-    /// Symbol size
-    pub size: u64,
 }
 
 impl fmt::Display for Symbol {

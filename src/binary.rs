@@ -22,6 +22,7 @@ use std::num;
 use std::path::Path;
 use std::str;
 
+/// Representation of a binary
 pub struct Binary {
     pub words: Vec<u32>,
 }
@@ -72,6 +73,7 @@ impl From<num::ParseIntError> for BinaryError {
 }
 
 impl Binary {
+    /// Load a binary from a hex file (generated with elf2hex)
     pub fn new_from_hex_file(path: &Path) -> Result<Binary, BinaryError> {
         let file = try!(File::open(path));
         let file = io::BufReader::new(file);

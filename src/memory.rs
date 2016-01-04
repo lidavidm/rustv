@@ -157,6 +157,31 @@ pub struct DirectMappedCache<'a> {
     next_level: SharedMemory<'a>,
 }
 
+fn copy_u8_into_u32(src: &[u8], dst: &mut [u32]) {
+    for (offset, word) in src.chunks(4).enumerate() {
+        let word = if word.len() == 4 {
+            (word[0] as u32) |
+            ((word[1] as u32) << 8) |
+            ((word[2] as u32) << 16) |
+            ((word[3] as u32) << 24)
+        }
+        else if word.len() == 3 {
+            (word[0] as u32) |
+            ((word[1] as u32) << 8) |
+            ((word[2] as u32) << 16)
+        }
+        else if word.len() == 2 {
+            (word[0] as u32) |
+            ((word[1] as u32) << 8)
+        }
+        else {
+            word[0] as u32
+        };
+
+        dst[offset] = word;
+    }
+}
+
 impl Memory {
     pub fn new(size: isa::Address) -> Memory {
         Memory {
@@ -171,6 +196,26 @@ impl Memory {
             let remainder = size - memory.len();
             memory.reserve(remainder);
         }
+        Memory {
+            memory: memory,
+        }
+    }
+
+    pub fn new_from_text_and_data(size: usize,
+                                  text: &[u8], text_offset: usize,
+                                  data: &[u8], data_offset: usize) -> Memory {
+        let mut memory = vec![0; size];
+
+        {
+            let mut text_segment = &mut memory[(text_offset / 4)..size];
+            copy_u8_into_u32(text, text_segment);
+        }
+
+        {
+            let mut data_segment = &mut memory[(data_offset / 4)..size];
+            copy_u8_into_u32(data, data_segment);
+        }
+
         Memory {
             memory: memory,
         }
