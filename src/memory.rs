@@ -307,8 +307,12 @@ impl<'a> MemoryInterface for DirectMappedCache<'a> {
     fn step(&mut self) {
         for set in self.cache.iter_mut() {
             if let Some(ref mut fetch_request) = set.fetch_request {
-                if fetch_request.cycles_left > 0 {
+                // Start filling the cache once the cycles_left would
+                // have hit 0, so that the consumer never gets
+                // stall_cycles = 0
+                if fetch_request.cycles_left > 1 {
                     fetch_request.cycles_left -= 1;
+                    return;
                 }
                 // read all the words in a line from the next
                 // level, until we get a stall

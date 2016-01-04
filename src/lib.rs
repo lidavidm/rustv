@@ -51,14 +51,16 @@ fn test_elfloader() {
     let (data, data_offset) = data.unwrap();
 
     let mmu = memory::IdentityMmu::new();
+    // TODO: make this a method; have it accept a MMU
     let memory = memory::Memory::new_from_text_and_data(
         0x8000,
         text, text_offset as usize,
         data, data_offset as usize);
     let memory_ref = Rc::new(RefCell::new(Box::new(memory) as Box<memory::MemoryInterface>));
     let cache = Rc::new( RefCell::new( Box::new( memory::DirectMappedCache::new(4, 4, memory_ref.clone())) as Box<memory::MemoryInterface>) );
-    let core = simulator::Core::new(start, cache.clone(), Box::new(mmu));
-    let mut simulator = simulator::Simulator::new(vec![core], memory_ref.clone());
+    let core = simulator::Core::new(start, 0x1000, cache.clone(), Box::new(mmu));
+    let core2 = simulator::Core::new(start, 0x3000, cache.clone(), Box::new(memory::IdentityMmu::new()));
+    let mut simulator = simulator::Simulator::new(vec![core, core2], memory_ref.clone());
     simulator.run();
 }
 

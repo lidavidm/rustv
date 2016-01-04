@@ -28,6 +28,8 @@ pub struct Core<'a>{
     running: bool,
     cache: SharedMemory<'a>,
     mmu: Box<Mmu + 'a>,
+    cycle_count: u32,
+    stall_count: u32,
 }
 
 pub struct Simulator<'a> {
@@ -75,22 +77,30 @@ impl RegisterFile {
 
 impl<'a> Core<'a> {
     // TODO: take Rc<RefCell<>> to Memory as well?
-    pub fn new(entry: isa::Address, cache: SharedMemory<'a>, mmu: Box<Mmu + 'a>) -> Core<'a> {
+    pub fn new(entry: isa::Address, sp: isa::Address,
+               cache: SharedMemory<'a>, mmu: Box<Mmu + 'a>) -> Core<'a> {
+        let mut registers = RegisterFile::new();
+        registers.write_word(isa::Register::X2, sp);
         Core {
             pc: entry,
-            registers: RegisterFile::new(),
+            registers: registers,
             stall: 0,
             running: true,
             cache: cache,
             mmu: mmu,
+            cycle_count: 0,
+            stall_count: 0,
         }
     }
 
     fn step(&mut self, inst: isa::Instruction) {
         let pc = self.pc;
 
+        self.cycle_count += 1;
+
         if self.stall > 0 {
             self.stall -= 1;
+            self.stall_count += 1;
             return;
         }
 
@@ -279,8 +289,7 @@ impl<'a> Core<'a> {
 
                     let result = self.cache.borrow_mut().read_word(address);
                     match result {
-                        Ok(value) =>
-                            self.registers.write_word(inst.rd(), value),
+                        Ok(value) => self.registers.write_word(inst.rd(), value),
                         Err(MemoryError::CacheMiss { stall_cycles }) => {
                             self.stall = stall_cycles;
                             return;
@@ -310,7 +319,7 @@ impl<'a> Core<'a> {
                     match result {
                         Ok(()) => (),
                         Err(MemoryError::CacheMiss { stall_cycles }) => {
-                            self.stall = stall_cycles;
+                            self.stall = stall_cycles - 1;
                             return;
                         },
                         Err(MemoryError::InvalidAddress) => {
@@ -352,7 +361,6 @@ impl<'a> Core<'a> {
 impl<'a> Simulator<'a> {
     pub fn new(cores: Vec<Core<'a>>, memory: SharedMemory<'a>)
                -> Simulator<'a> {
-        // TODO: pass in GP, SP, _start
         // TODO: initialize GP, registers (GP is in headers)
         Simulator {
             cores: cores,
@@ -361,18 +369,12 @@ impl<'a> Simulator<'a> {
     }
 
     pub fn run(&mut self) {
-        // hardcode SP
-        self.cores[0].registers.write_word(isa::Register::X2, 0x7FFC);
-        let mut total_cycles = 0;
-        let mut stall_cycles = 0;
         loop {
             let mut ran = false;
-            total_cycles += 1;
             for core in self.cores.iter_mut() {
                 if !core.running {
                     continue;
                 }
-                if core.stall > 0 { stall_cycles += 1; }
 
                 let pc = core.pc;
                 let pc = core.mmu.translate(pc);
@@ -390,7 +392,9 @@ impl<'a> Simulator<'a> {
             }
             if !ran {
                 println!("All cores are not running, stopping...");
-                println!("Stalled cycles: {} of {}", stall_cycles, total_cycles);
+                for (i, core) in self.cores.iter().enumerate() {
+                    println!("Core {}: stalled {} of {}", i, core.stall_count, core.cycle_count);
+                }
                 break;
             }
         }
