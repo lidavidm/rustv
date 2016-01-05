@@ -8,6 +8,6 @@ repository = "https://git.lidavidm.me/rustv"
 readme = "README.md"
 license = "GPL-3.0"
 
-[dependencies.elfloader]
+[dependencies.elfloader32]
 path = "src/rust-elfloader"
 version = "0.0.3"

@@ -15,7 +15,7 @@
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
 #![feature(braced_empty_structs, step_by)]
-extern crate elfloader as elfloader_lib;
+extern crate elfloader32 as elfloader_lib;
 
 pub mod isa;
 pub mod binary;

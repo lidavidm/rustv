@@ -1,7 +1,7 @@
 #![feature(no_std, core, core_prelude, core_slice_ext, custom_derive)]
 #![no_std]
 
-#![crate_name = "elfloader"]
+#![crate_name = "elfloader32"]
 #![crate_type = "lib"]
 
 #[cfg(test)]
