@@ -1,4 +1,4 @@
-// Copyright 2016 David Li
+// Copyright 2015-2016 David Li
 // This file is part of rustv.
 
 // rustv is free software: you can redistribute it and/or modify
