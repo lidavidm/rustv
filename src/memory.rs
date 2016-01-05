@@ -35,6 +35,9 @@ pub trait MemoryInterface {
 
     fn step(&mut self);
 
+    // fn prefetch(&mut self, address: isa::Address);
+    // fn invalidate(&mut self, address: isa::Address);
+
     fn read_word(&mut self, address: isa::Address) -> Result<isa::Word>;
     fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Result<()>;
 
@@ -274,14 +277,6 @@ impl<'a> DirectMappedCache<'a> {
     fn normalize_address(&self, address: isa::Address) -> isa::Address {
         let offset_mask = !(self.block_words * 4 - 1);
         address & offset_mask
-    }
-
-    pub fn prefetch(&mut self, address: isa::Address) {
-
-    }
-
-    pub fn invalidate(&mut self, address: isa::Address) {
-
     }
 }
 

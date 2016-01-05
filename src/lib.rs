@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
-#![feature(braced_empty_structs, clone_from_slice, raw, step_by)]
+#![feature(braced_empty_structs, step_by)]
 pub mod isa;
 pub mod binary;
 pub mod memory;
