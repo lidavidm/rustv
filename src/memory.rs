@@ -160,7 +160,7 @@ pub struct DirectMappedCache<'a> {
     next_level: SharedMemory<'a>,
 }
 
-fn copy_u8_into_u32(src: &[u8], dst: &mut [u32]) {
+fn copy_u8_into_u32<T: Mmu>(mmu: &T, base: usize, src: &[u8], dst: &mut [u32]) {
     for (offset, word) in src.chunks(4).enumerate() {
         let word = if word.len() == 4 {
             (word[0] as u32) |
@@ -181,7 +181,8 @@ fn copy_u8_into_u32(src: &[u8], dst: &mut [u32]) {
             word[0] as u32
         };
 
-        dst[offset] = word;
+        let addr = mmu.translate((base as isa::Address) + ((4 * offset) as isa::Address)) / 4;
+        dst[addr as usize] = word;
     }
 }
 
@@ -204,10 +205,9 @@ impl Memory {
         }
     }
 
-    pub fn write_segment(&mut self, data: &[u8], offset: usize) {
-        let size = self.memory.len();
-        let mut segment = &mut self.memory[(offset / 4)..size];
-        copy_u8_into_u32(data, segment);
+    pub fn write_segment<T: Mmu>(&mut self, mmu: &T,
+                                 data: &[u8], offset: usize) {
+        copy_u8_into_u32(mmu, offset, data, &mut self.memory);
     }
 }
 

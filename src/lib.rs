@@ -27,6 +27,7 @@ fn test_elfloader() {
     use std::rc::Rc;
     use std::cell::RefCell;
     extern crate elfloader;
+    use memory::{Mmu, MemoryInterface};
 
     let mut f = File::open("../riscv/kernel").unwrap();
     let mut buffer = Vec::new();
@@ -51,15 +52,26 @@ fn test_elfloader() {
     let (data, data_offset) = data.unwrap();
 
     let mmu = memory::IdentityMmu::new();
-    // TODO: make this a method; have it accept a MMU
-    let mut memory = memory::Memory::new(0x8000);
-    memory.write_segment(text, text_offset as usize);
-    memory.write_segment(data, data_offset as usize);
-    let memory_ref = Rc::new(RefCell::new(Box::new(memory) as Box<memory::MemoryInterface>));
-    let cache = Rc::new( RefCell::new( Box::new( memory::DirectMappedCache::new(4, 4, memory_ref.clone())) as Box<memory::MemoryInterface>) );
-    let core = simulator::Core::new(start, 0x1000, cache.clone(), Box::new(mmu));
-    let core2 = simulator::Core::new(start, 0x3000, cache.clone(), Box::new(memory::IdentityMmu::new()));
-    let mut simulator = simulator::Simulator::new(vec![core, core2], memory_ref.clone());
+    let mmu2 = memory::ReverseMmu::new(0x8000);
+    let mut memory = memory::Memory::new(0x10000);
+    memory.write_segment(&mmu, text, text_offset as usize);
+    memory.write_segment(&mmu, data, data_offset as usize);
+    memory.write_segment(&mmu2, text, text_offset as usize);
+    memory.write_segment(&mmu2, data, data_offset as usize);
+
+    let memory_box = Box::new(memory) as Box<memory::MemoryInterface>;
+    let memory_ref = Rc::new(RefCell::new(memory_box));
+    let cache = memory::DirectMappedCache::new(4, 4, memory_ref.clone());
+    let cache_box = Box::new(cache) as Box<memory::MemoryInterface>;
+    let cache_ref = Rc::new(RefCell::new(cache_box));
+    let core = simulator::Core::new(
+        start, 0x1000,
+        cache_ref.clone(), Box::new(mmu));
+    let core2 = simulator::Core::new(
+        start, 0x3000,
+        cache_ref.clone(), Box::new(mmu2));
+    let cores = vec![core, core2];
+    let mut simulator = simulator::Simulator::new(cores, memory_ref.clone());
     simulator.run();
 }
 
