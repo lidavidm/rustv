@@ -1,9 +1,9 @@
 [package]
 name = "elfloader32"
 version = "0.0.3"
-authors = ["Gerd Zellweger <mail@gerdzellweger.com>", "Christopher Cole <chris.cole.09@gmail.com>", "John Kåre Alsaker <john.kare.alsaker@gmail.com>"]
-repository = "https://github.com/gz/rust-elfloader"
+authors = ["Gerd Zellweger <mail@gerdzellweger.com>", "Christopher Cole <chris.cole.09@gmail.com>", "John Kåre Alsaker <john.kare.alsaker@gmail.com>", "David Li <li.davidm96@gmail.com>"]
+repository = "https://git.lidavidm.me/rustv"
 license = "Apache-2.0"
-description = "A rust library to load ELF files."
+description = "A rust library to load ELF files, modified to handle 32-bit ELF."
 keywords = ["elf", "x86", "os"]
 readme = "README.md"
