@@ -201,24 +201,10 @@ impl Memory {
         }
     }
 
-    pub fn new_from_text_and_data(size: usize,
-                                  text: &[u8], text_offset: usize,
-                                  data: &[u8], data_offset: usize) -> Memory {
-        let mut memory = vec![0; size];
-
-        {
-            let mut text_segment = &mut memory[(text_offset / 4)..size];
-            copy_u8_into_u32(text, text_segment);
-        }
-
-        {
-            let mut data_segment = &mut memory[(data_offset / 4)..size];
-            copy_u8_into_u32(data, data_segment);
-        }
-
-        Memory {
-            memory: memory,
-        }
+    pub fn write_segment(&mut self, data: &[u8], offset: usize) {
+        let size = self.memory.len();
+        let mut segment = &mut self.memory[(offset / 4)..size];
+        copy_u8_into_u32(data, segment);
     }
 }
 

@@ -52,10 +52,9 @@ fn test_elfloader() {
 
     let mmu = memory::IdentityMmu::new();
     // TODO: make this a method; have it accept a MMU
-    let memory = memory::Memory::new_from_text_and_data(
-        0x8000,
-        text, text_offset as usize,
-        data, data_offset as usize);
+    let mut memory = memory::Memory::new(0x8000);
+    memory.write_segment(text, text_offset as usize);
+    memory.write_segment(data, data_offset as usize);
     let memory_ref = Rc::new(RefCell::new(Box::new(memory) as Box<memory::MemoryInterface>));
     let cache = Rc::new( RefCell::new( Box::new( memory::DirectMappedCache::new(4, 4, memory_ref.clone())) as Box<memory::MemoryInterface>) );
     let core = simulator::Core::new(start, 0x1000, cache.clone(), Box::new(mmu));
