@@ -3,5 +3,11 @@ name = "rustv"
 version = "0.1.0"
 authors = ["David Li <li.davidm96@gmail.com>"]
 
+description = "A minimal, intentionally inaccurate RISC-V ISA simulator"
+repository = "https://git.lidavidm.me/rustv"
+readme = "README.md"
+license = "GPL-3.0"
+
 [dependencies.elfloader]
 path = "src/rust-elfloader"
+version = "0.0.3"
