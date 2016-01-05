@@ -15,10 +15,14 @@
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
 #![feature(braced_empty_structs, step_by)]
+extern crate elfloader as elfloader_lib;
+
 pub mod isa;
 pub mod binary;
 pub mod memory;
 pub mod simulator;
+
+pub use elfloader_lib as elfloader;
 
 #[test]
 fn test_elfloader() {
@@ -26,7 +30,6 @@ fn test_elfloader() {
     use std::fs::File;
     use std::rc::Rc;
     use std::cell::RefCell;
-    extern crate elfloader;
     use memory::{Mmu, MemoryInterface};
 
     let mut f = File::open("../riscv/kernel").unwrap();
