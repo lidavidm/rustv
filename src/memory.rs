@@ -42,7 +42,7 @@ pub trait MemoryInterface {
     fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Result<()>;
 
     fn read_instruction(&mut self, address: isa::Address) -> Option<Instruction> {
-        match self.read_word(address / 4) {
+        match self.read_word(address) {
             Ok(word) => Some(Instruction::new(word)),
             Err(_) => None,
         }
