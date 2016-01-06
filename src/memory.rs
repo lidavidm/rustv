@@ -89,7 +89,7 @@ pub trait MemoryInterface {
     }
 }
 
-pub type SharedMemory<'a> = Rc<RefCell<Box<MemoryInterface + 'a>>>;
+pub type SharedMemory<'a> = Rc<RefCell<MemoryInterface + 'a>>;
 
 pub trait Mmu {
     fn translate(&self, address: isa::Address) -> isa::Address;

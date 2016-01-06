@@ -368,34 +368,49 @@ impl<'a> Simulator<'a> {
         }
     }
 
+    fn step(&mut self) -> bool {
+        let mut ran = false;
+        for core in self.cores.iter_mut() {
+            if !core.running {
+                continue;
+            }
+
+            let pc = core.pc;
+            let pc = core.mmu.translate(pc);
+            let inst = self.memory.borrow_mut().read_instruction(pc);
+
+            if let Some(inst) = inst {
+                core.step(inst);
+            }
+            else {
+                // TODO: trap
+            }
+
+            core.cache.borrow_mut().step();
+            ran = true;
+        }
+        if !ran {
+            println!("All cores are not running, stopping...");
+            for (i, core) in self.cores.iter().enumerate() {
+                println!("Core {}: stalled {} of {}", i, core.stall_count, core.cycle_count);
+            }
+        }
+
+        ran
+    }
+
     pub fn run(&mut self) {
         loop {
-            let mut ran = false;
-            for core in self.cores.iter_mut() {
-                if !core.running {
-                    continue;
-                }
-
-                let pc = core.pc;
-                let pc = core.mmu.translate(pc);
-                let inst = self.memory.borrow_mut().read_instruction(pc);
-
-                if let Some(inst) = inst {
-                    core.step(inst);
-                }
-                else {
-                    // TODO: trap
-                }
-
-                core.cache.borrow_mut().step();
-                ran = true;
+            if !self.step() {
+                break
             }
-            if !ran {
-                println!("All cores are not running, stopping...");
-                for (i, core) in self.cores.iter().enumerate() {
-                    println!("Core {}: stalled {} of {}", i, core.stall_count, core.cycle_count);
-                }
-                break;
+        }
+    }
+
+    pub fn run_max(&mut self, cycles: usize) {
+        for _ in 0..cycles {
+            if !self.step() {
+                break
             }
         }
     }

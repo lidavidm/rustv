@@ -62,11 +62,9 @@ fn test_elfloader() {
     memory.write_segment(&mmu2, text, text_offset as usize);
     memory.write_segment(&mmu2, data, data_offset as usize);
 
-    let memory_box = Box::new(memory) as Box<memory::MemoryInterface>;
-    let memory_ref = Rc::new(RefCell::new(memory_box));
+    let memory_ref = Rc::new(RefCell::new(memory));
     let cache = memory::DirectMappedCache::new(4, 4, memory_ref.clone());
-    let cache_box = Box::new(cache) as Box<memory::MemoryInterface>;
-    let cache_ref = Rc::new(RefCell::new(cache_box));
+    let cache_ref = Rc::new(RefCell::new(cache));
     let core = simulator::Core::new(
         start, 0x1000,
         cache_ref.clone(), Box::new(mmu));
@@ -87,7 +85,7 @@ mod tests {
         use std::cell::RefCell;
 
         let memory = Memory::new(16);
-        let memory_ref = Rc::new(RefCell::new(Box::new(memory) as Box<MemoryInterface>));
+        let memory_ref = Rc::new(RefCell::new(memory));
         let dm_cache_word = DirectMappedCache::new(4, 1, memory_ref.clone());
         let dm_cache_doubleword = DirectMappedCache::new(4, 2, memory_ref.clone());
 
@@ -134,8 +132,7 @@ mod tests {
             stall_cycles: memory.latency(),
         });
 
-        let memory_box = Box::new(memory) as Box<MemoryInterface>;
-        let memory_ref = Rc::new(RefCell::new(memory_box));
+        let memory_ref = Rc::new(RefCell::new(memory));
         let mut dm_cache = DirectMappedCache::new(4, 4, memory_ref.clone());
 
         assert_eq!(dm_cache.read_word(0x10), stall);
