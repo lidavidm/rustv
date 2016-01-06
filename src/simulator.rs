@@ -105,6 +105,13 @@ impl<'a> Core<'a> {
         }
 
         match inst.opcode() {
+            isa::opcodes::LUI => {
+                self.registers.write_word(inst.rd(), inst.u_imm() as isa::Word)
+            },
+            isa::opcodes::AUIPC => {
+                let result = (pc as isa::SignedWord) + inst.u_imm();
+                self.registers.write_word(inst.rd(), result as isa::Word);
+            },
             isa::opcodes::JALR => {
                 // TODO: assert funct3 is 0
                 let base = self.registers.read_word(inst.rs1())

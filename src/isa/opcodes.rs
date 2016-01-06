@@ -14,6 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
+pub const LUI: u32 = 0x37;
+pub const AUIPC: u32 = 0x17;
 pub const BRANCH: u32 = 0x63;
 pub const JALR: u32 = 0x67;
 pub const JAL: u32 = 0x6F;

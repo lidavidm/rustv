@@ -176,4 +176,8 @@ impl Instruction {
         let low12 = ((self.word as SignedWord) >> 31) as Word;
         ((low12 << 12) | (low11 << 11) | (low5 << 5) | (low1 << 1)) as SignedWord
     }
+
+    pub fn u_imm(&self) -> SignedWord {
+        (self.word & 0xFFFFF000) as SignedWord
+    }
 }
