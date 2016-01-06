@@ -30,7 +30,6 @@ fn test_elfloader() {
     use std::fs::File;
     use std::rc::Rc;
     use std::cell::RefCell;
-    use memory::{Mmu, MemoryInterface};
 
     let mut f = File::open("../riscv/kernel").unwrap();
     let mut buffer = Vec::new();
