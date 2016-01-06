@@ -155,8 +155,8 @@ impl Instruction {
 
     pub fn s_imm(&self) -> SignedWord {
         let low = (self.word >> 7) & 0x1F;
-        let high = (((self.word as SignedWord) >> 25) & 0x7F) as Word;
-        ((high << 7) | low) as SignedWord
+        let high = ((self.word as SignedWord) >> 25) as Word;
+        ((high << 5) | low) as SignedWord
     }
 
     pub fn uj_imm(&self) -> SignedWord {
