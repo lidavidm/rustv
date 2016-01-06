@@ -280,60 +280,78 @@ impl<'a> Core<'a> {
                     self.registers.write_word(inst.rd(), value);
                 }
             },
-            isa::opcodes::LOAD => match inst.funct3() {
-                isa::funct3::LW => {
-                    let imm = inst.i_imm();
-                    let base = self.registers.read_word(inst.rs1());
-                    let address = ((base as isa::SignedWord) + imm) as isa::Address;
-                    let address = self.mmu.translate(address);
+            isa::opcodes::LOAD => {
+                let imm = inst.i_imm();
+                let base = self.registers.read_word(inst.rs1());
+                let address = ((base as isa::SignedWord) + imm) as isa::Address;
+                let address = self.mmu.translate(address);
 
-                    let result = self.cache.borrow_mut().read_word(address);
-                    match result {
-                        Ok(value) => self.registers.write_word(inst.rd(), value),
-                        Err(MemoryError::CacheMiss { stall_cycles }) => {
-                            self.stall = stall_cycles;
-                            return;
-                        },
-                        Err(MemoryError::InvalidAddress) => {
-                            self.trap(Trap::IllegalRead {
-                                address: pc,
-                                instruction: inst,
-                                memory_address: address,
-                            });
-                        }
-                    }
-                },
-                _ => {
-                    panic!("Invalid load funct3code: 0x{:x}", inst.funct3());
+                let result = match inst.funct3() {
+                    isa::funct3::LB =>
+                        self.cache.borrow_mut()
+                        .read_byte(address)
+                        .map(|b| (b as isa::SignedByte) as isa::Word),
+                    isa::funct3::LH =>
+                        panic!("{:x}: Unimplemented LH"),
+                    isa::funct3::LW =>
+                        self.cache.borrow_mut().read_word(address),
+                    isa::funct3::LBU =>
+                        self.cache.borrow_mut()
+                        .read_byte(address)
+                        .map(|b| b as isa::Word),
+                    isa::funct3::LHU =>
+                        panic!("{:x}: Unimplemented LHU"),
+                    _ => panic!("{:x}: Invalid load funct3code: 0x{:x}",
+                                pc, inst.funct3()),
+                };
+
+                match result {
+                    Ok(value) => self.registers.write_word(inst.rd(), value),
+                    Err(MemoryError::CacheMiss { stall_cycles }) => {
+                        self.stall = stall_cycles;
+                        return;  // don't increment PC
+                    },
+                    Err(MemoryError::InvalidAddress) => {
+                        self.trap(Trap::IllegalRead {
+                            address: pc,
+                            instruction: inst,
+                            memory_address: address,
+                        });
+                    },
                 }
             },
-            isa::opcodes::STORE => match inst.funct3() {
-                isa::funct3::SW => {
-                    let imm = inst.s_imm();
-                    let base = self.registers.read_word(inst.rs1());
-                    let val = self.registers.read_word(inst.rs2());
-                    let address = ((base as isa::SignedWord) + imm) as isa::Address;
-                    let address = self.mmu.translate(address);
+            isa::opcodes::STORE => {
+                let imm = inst.s_imm();
+                let base = self.registers.read_word(inst.rs1());
+                let val = self.registers.read_word(inst.rs2());
+                let address = ((base as isa::SignedWord) + imm) as isa::Address;
+                let address = self.mmu.translate(address);
 
-                    let result = self.cache.borrow_mut().write_word(address, val);
-                    match result {
-                        Ok(()) => (),
-                        Err(MemoryError::CacheMiss { stall_cycles }) => {
-                            self.stall = stall_cycles - 1;
-                            return;
-                        },
-                        Err(MemoryError::InvalidAddress) => {
-                            self.trap(Trap::IllegalWrite {
-                                address: pc,
-                                instruction: inst,
-                                memory_address: address,
-                                memory_value: val,
-                            })
-                        }
+                let result = match inst.funct3() {
+                    isa::funct3::SB =>
+                        self.cache.borrow_mut().write_byte(address, val as u8),
+                    isa::funct3::SH =>
+                        panic!("PC {:x}: Unimplemented SH"),
+                    isa::funct3::SW =>
+                        self.cache.borrow_mut().write_word(address, val),
+                    _ => panic!("PC {:x}: Invalid store funct3code: 0x{:x}",
+                                pc, inst.funct3()),
+                };
+
+                match result {
+                    Ok(()) => (),
+                    Err(MemoryError::CacheMiss { stall_cycles }) => {
+                        self.stall = stall_cycles;
+                        return;  // don't increment PC
+                    },
+                    Err(MemoryError::InvalidAddress) => {
+                        self.trap(Trap::IllegalWrite {
+                            address: pc,
+                            instruction: inst,
+                            memory_address: address,
+                            memory_value: val,
+                        })
                     }
-                }
-                _ => {
-                    panic!("Invalid store funct3code: 0x{:x}", inst.funct3());
                 }
             },
             isa::opcodes::SYSTEM => match inst.i_imm() {

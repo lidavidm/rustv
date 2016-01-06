@@ -39,6 +39,12 @@ pub const BGE: u32 = 0b101;
 pub const BLTU: u32 = 0b110;
 pub const BGEU: u32 = 0b111;
 
-pub const LW: u32 = 0x2;
+pub const LB: u32 = 0b000;
+pub const LH: u32 = 0b001;
+pub const LW: u32 = 0b010;
+pub const LBU: u32 = 0b100;
+pub const LHU: u32 = 0b101;
 
-pub const SW: u32 = 0x2;
+pub const SB: u32 = 0b000;
+pub const SH: u32 = 0b001;
+pub const SW: u32 = 0b010;
