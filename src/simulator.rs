@@ -261,7 +261,9 @@ impl<'a> Core<'a> {
                         .read_byte(address)
                         .map(|b| (b as isa::SignedByte) as isa::Word),
                     isa::funct3::LH =>
-                        panic!("{:x}: Unimplemented LH"),
+                        self.cache.borrow_mut()
+                        .read_halfword(address)
+                        .map(|b| (b as isa::SignedHalfWord) as isa::Word),
                     isa::funct3::LW =>
                         self.cache.borrow_mut().read_word(address),
                     isa::funct3::LBU =>
@@ -269,7 +271,9 @@ impl<'a> Core<'a> {
                         .read_byte(address)
                         .map(|b| b as isa::Word),
                     isa::funct3::LHU =>
-                        panic!("{:x}: Unimplemented LHU"),
+                        self.cache.borrow_mut()
+                        .read_halfword(address)
+                        .map(|b| b as isa::Word),
                     _ => panic!("{:x}: Invalid load funct3code: 0x{:x}",
                                 pc, inst.funct3()),
                 };
@@ -298,9 +302,11 @@ impl<'a> Core<'a> {
 
                 let result = match inst.funct3() {
                     isa::funct3::SB =>
-                        self.cache.borrow_mut().write_byte(address, val as u8),
+                        self.cache.borrow_mut()
+                        .write_byte(address, val as isa::Byte),
                     isa::funct3::SH =>
-                        panic!("PC {:x}: Unimplemented SH"),
+                        self.cache.borrow_mut()
+                        .write_halfword(address, val as isa::HalfWord),
                     isa::funct3::SW =>
                         self.cache.borrow_mut().write_word(address, val),
                     _ => panic!("PC {:x}: Invalid store funct3code: 0x{:x}",
