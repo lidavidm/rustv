@@ -16,10 +16,9 @@
 
 use isa;
 use memory::{MemoryInterface, MemoryError, Mmu, SharedMemory};
-
-struct RegisterFile {
-    registers: [isa::Word; 32],
-}
+use register_file::RegisterFile;
+use syscall::SyscallHandler;
+use trap::Trap;
 
 pub struct Core<'a>{
     pc: isa::Address,
@@ -32,47 +31,10 @@ pub struct Core<'a>{
     stall_count: u32,
 }
 
-pub struct Simulator<'a> {
+pub struct Simulator<'a, T: SyscallHandler> {
     cores: Vec<Core<'a>>,
     memory: SharedMemory<'a>,
-}
-
-#[derive(Debug)]
-enum Trap {
-    IllegalInstruction {
-        address: isa::Address,
-        instruction: isa::Instruction,
-    },
-    IllegalRead {
-        address: isa::Address,
-        instruction: isa::Instruction,
-        memory_address: isa::Address,
-    },
-    IllegalWrite {
-        address: isa::Address,
-        instruction: isa::Instruction,
-        memory_address: isa::Address,
-        memory_value: isa::Word,
-    }
-}
-
-impl RegisterFile {
-    fn new() -> RegisterFile {
-        RegisterFile {
-            registers: [0; 32],
-        }
-    }
-
-    fn write_word<T: Into<isa::Register>>(&mut self, reg: T, value: isa::Word) {
-        // TODO: should be safe to use unchecked index
-        let reg = reg.into();
-        if reg == isa::Register::X0 { return; }
-        self.registers[reg.as_num()] = value;
-    }
-
-    fn read_word<T: Into<isa::Register>>(&mut self, reg: T) -> isa::Word {
-        self.registers[reg.into().as_num()]
-    }
+    syscall: T,
 }
 
 impl<'a> Core<'a> {
@@ -93,7 +55,7 @@ impl<'a> Core<'a> {
         }
     }
 
-    fn step(&mut self, inst: isa::Instruction) {
+    fn step(&mut self, inst: isa::Instruction, system: &mut SyscallHandler) {
         let pc = self.pc;
 
         self.cycle_count += 1;
@@ -363,8 +325,9 @@ impl<'a> Core<'a> {
             },
             isa::opcodes::SYSTEM => match inst.i_imm() {
                 0x0 => {
-                    // System call
-                    println!("System call {}:", self.registers.read_word(isa::Register::X10));
+                    if let Some(trap) = system.syscall(&mut self.registers) {
+                        self.trap(trap);
+                    }
                 }
                 _ => {
 
@@ -383,13 +346,14 @@ impl<'a> Core<'a> {
     }
 }
 
-impl<'a> Simulator<'a> {
-    pub fn new(cores: Vec<Core<'a>>, memory: SharedMemory<'a>)
-               -> Simulator<'a> {
+impl<'a, T: SyscallHandler> Simulator<'a, T> {
+    pub fn new(cores: Vec<Core<'a>>, memory: SharedMemory<'a>, syscall: T)
+               -> Simulator<'a, T> {
         // TODO: initialize GP, registers (GP is in headers)
         Simulator {
             cores: cores,
             memory: memory,
+            syscall: syscall,
         }
     }
 
@@ -405,7 +369,7 @@ impl<'a> Simulator<'a> {
             let inst = self.memory.borrow_mut().read_instruction(pc);
 
             if let Some(inst) = inst {
-                core.step(inst);
+                core.step(inst, &mut self.syscall);
             }
             else {
                 // TODO: trap

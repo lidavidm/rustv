@@ -20,7 +20,10 @@ extern crate elfloader32 as elfloader_lib;
 pub mod isa;
 pub mod binary;
 pub mod memory;
+pub mod register_file;
 pub mod simulator;
+pub mod syscall;
+pub mod trap;
 
 pub use elfloader_lib as elfloader;
 
@@ -31,6 +34,42 @@ fn test_elfloader() {
     use std::rc::Rc;
     use std::cell::RefCell;
 
+    use memory::MemoryInterface;
+
+    struct SyscallHandler<'a> {
+        memory: memory::SharedMemory<'a>,
+    }
+
+    impl<'a> syscall::SyscallHandler for SyscallHandler<'a> {
+        fn syscall(&mut self, registers: &mut register_file::RegisterFile) -> Option<trap::Trap> {
+            println!("Syscall number {}", registers.read_word(isa::Register::X10));
+            let mut base = registers.read_word(isa::Register::X11);
+            let mut string = vec![];
+
+            loop {
+                let c = self.memory.borrow_mut().read_byte(base);
+
+                if let Ok(0x00) = c {
+                    break;
+                }
+                else if let Ok(c) = c {
+                    string.push(c);
+                }
+
+                base += 1;
+            }
+
+            let result = std::str::from_utf8(&string);
+            if let Ok(string) = result {
+                println!("{}", string);
+            }
+            else {
+                println!("Error printing string: {:?}", result);
+            }
+            None
+        }
+    }
+
     let mut f = File::open("../riscv/kernel").unwrap();
     let mut buffer = Vec::new();
 
@@ -39,27 +78,18 @@ fn test_elfloader() {
     let elf = elfloader::ElfBinary::new("test", &buffer).unwrap();
     let start = elf.file_header().entry as isa::Address;
 
-    let mut text = None;
-    let mut data = None;
-    for p in elf.section_headers() {
-        if p.name.0 == 0x1b {
-            text = Some((elf.section_data(p), p.addr));
-        }
-        else if p.name.0 == 0x33 {
-            data = Some((elf.section_data(p), p.addr));
-        }
-    }
-
-    let (text, text_offset) = text.unwrap();
-    let (data, data_offset) = data.unwrap();
-
     let mmu = memory::IdentityMmu::new();
     let mmu2 = memory::ReverseMmu::new(0x8000);
     let mut memory = memory::Memory::new(0x10000);
-    memory.write_segment(&mmu, text, text_offset as usize);
-    memory.write_segment(&mmu, data, data_offset as usize);
-    memory.write_segment(&mmu2, text, text_offset as usize);
-    memory.write_segment(&mmu2, data, data_offset as usize);
+
+    for p in elf.section_headers() {
+        let name = elf.section_name(p);
+        if name == ".text" || name == ".sdata" || name == ".rodata" {
+            println!("Loading {} section", name);
+            memory.write_segment(&mmu, elf.section_data(p), p.addr as usize);
+            memory.write_segment(&mmu2, elf.section_data(p), p.addr as usize);
+        }
+    }
 
     let memory_ref = Rc::new(RefCell::new(memory));
     let cache = memory::DirectMappedCache::new(4, 4, memory_ref.clone());
@@ -71,7 +101,9 @@ fn test_elfloader() {
         start, 0x3000,
         cache_ref.clone(), Box::new(mmu2));
     let cores = vec![core, core2];
-    let mut simulator = simulator::Simulator::new(cores, memory_ref.clone());
+
+    let system = SyscallHandler { memory: memory_ref.clone(), };
+    let mut simulator = simulator::Simulator::new(cores, memory_ref.clone(), system);
     simulator.run();
 }
 
