@@ -384,14 +384,14 @@ impl<'a, T: SyscallHandler> Simulator<'a, T> {
             core.cache.borrow_mut().step();
             ran = true;
         }
-        if !ran {
-            println!("All cores are not running, stopping...");
-            for (i, core) in self.cores.iter().enumerate() {
-                println!("Core {}: stalled {} of {}", i, core.stall_count, core.cycle_count);
-            }
-        }
 
         ran
+    }
+
+    fn report(&self) {
+        for (i, core) in self.cores.iter().enumerate() {
+            println!("Core {}: stalled {} of {}", i, core.stall_count, core.cycle_count);
+        }
     }
 
     pub fn run(&mut self) {
@@ -400,6 +400,9 @@ impl<'a, T: SyscallHandler> Simulator<'a, T> {
                 break
             }
         }
+
+        println!("All cores are not running, stopping...");
+        self.report();
     }
 
     pub fn run_max(&mut self, cycles: usize) {
@@ -408,5 +411,8 @@ impl<'a, T: SyscallHandler> Simulator<'a, T> {
                 break
             }
         }
+
+        println!("Out of cycles, stopping...");
+        self.report();
     }
 }
