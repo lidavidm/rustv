@@ -48,8 +48,39 @@ pub trait MemoryInterface {
         }
     }
 
-    // fn read_halfword(&self, address: isa::Address) -> Result<isa::HalfWord>;
-    // fn write_halfword(&self, address: isa::Address) -> Result<()>;
+    // TODO: check address more thoroughly
+
+    fn read_halfword(&mut self, address: isa::Address) -> Result<isa::HalfWord> {
+        let result = self.read_word(address);
+        let offset = address & 0b10;
+
+        match result {
+            Ok(word) => match offset {
+                0 => Ok((word & 0xFFFF) as isa::HalfWord),
+                2 => Ok(((word & 0xFFFF0000) >> 16) as isa::HalfWord),
+                _ => panic!("Invalid halfword offset: address {:x}", address),
+            },
+            Err(e) => Err(e),
+        }
+    }
+
+    fn write_halfword(&mut self, address: isa::Address, value: isa::HalfWord) -> Result<()> {
+        let result = self.read_word(address);
+        let offset = address & 0b10;
+        let value = value as isa::Word;
+
+        match result {
+            Ok(word) => {
+                let value = match offset {
+                    0 => (word & 0xFFFF0000) | value,
+                    2 => (word & 0x0000FFFF) | (value << 16),
+                    _ => panic!("Invalid halfword offset: address {:x}", address),
+                };
+                self.write_word(address, value)
+            },
+            Err(e) => Err(e),
+        }
+    }
 
     fn read_byte(&mut self, address: isa::Address) -> Result<isa::Byte> {
         let result = self.read_word(address);
@@ -61,16 +92,15 @@ pub trait MemoryInterface {
                 1 => Ok(((word & 0xFF00) >> 8) as isa::Byte),
                 2 => Ok(((word & 0xFF0000) >> 16) as isa::Byte),
                 3 => Ok(((word & 0xFF000000) >> 24) as isa::Byte),
-                _ => panic!(""),
+                _ => panic!("Invalid byte offset: {:x}", address),
             },
             Err(e) => Err(e),
         }
     }
 
     fn write_byte(&mut self, address: isa::Address, value: isa::Byte) -> Result<()> {
-        let offset = address % 4;
-
         let result = self.read_word(address);
+        let offset = address % 4;
         let value = value as isa::Word;
 
         match result {
@@ -80,7 +110,7 @@ pub trait MemoryInterface {
                     1 => (word & !(0xFF00)) | (value << 8),
                     2 => (word & !(0xFF0000)) | (value << 16),
                     3 => (word & !(0xFF000000)) | (value << 24),
-                    _ => panic!(""),
+                    _ => panic!("Invalid byte offset: {:x}", address),
                 };
                 self.write_word(address, value)
             },

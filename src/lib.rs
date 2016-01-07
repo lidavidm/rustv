@@ -143,10 +143,22 @@ mod tests {
                    Err(MemoryError::InvalidAddress));
         assert_eq!(memory.write_byte(2, 0xF0),
                    Err(MemoryError::InvalidAddress));
+        assert_eq!(memory.write_byte(3, 0xF0),
+                   Err(MemoryError::InvalidAddress));
+        assert_eq!(memory.write_halfword(0, 0xF0),
+                   Err(MemoryError::InvalidAddress));
+        assert_eq!(memory.write_halfword(2, 0xF0),
+                   Err(MemoryError::InvalidAddress));
 
         for address in (4..size).step_by(4) {
             assert_eq!(memory.write_word(address, 0xF0), Ok(()));
             assert_eq!(memory.read_word(address), Ok(0xF0));
+            assert_eq!(memory.read_halfword(address), Ok(0xF0));
+            assert_eq!(memory.read_halfword(address + 2), Ok(0x0));
+            assert_eq!(memory.read_byte(address), Ok(0xF0));
+            assert_eq!(memory.read_byte(address + 1), Ok(0x0));
+            assert_eq!(memory.read_byte(address + 2), Ok(0x0));
+            assert_eq!(memory.read_byte(address + 3), Ok(0x0));
         }
 
         assert_eq!(memory.write_word(0x10, 0x01234567), Ok(()));
@@ -155,6 +167,8 @@ mod tests {
         assert_eq!(memory.read_byte(0x11), Ok(0x45));
         assert_eq!(memory.read_byte(0x12), Ok(0x23));
         assert_eq!(memory.read_byte(0x13), Ok(0x01));
+        assert_eq!(memory.read_halfword(0x10), Ok(0x4567));
+        assert_eq!(memory.read_halfword(0x12), Ok(0x0123));
 
         let stall = Err(MemoryError::CacheMiss {
             stall_cycles: memory.latency(),
@@ -183,6 +197,8 @@ mod tests {
         assert_eq!(dm_cache.read_byte(0x13), Ok(0x01));
         assert_eq!(dm_cache.write_word(0x18, 0xBEEFBEEF), Ok(()));
         assert_eq!(dm_cache.read_word(0x18), Ok(0xBEEFBEEF));
+        assert_eq!(dm_cache.read_halfword(0x10), Ok(0x4567));
+        assert_eq!(dm_cache.read_halfword(0x12), Ok(0x0123));
         assert_eq!(memory_ref.borrow_mut().read_word(0x18), Ok(0xBEEFBEEF));
 
         for _ in 0..100 {
@@ -196,5 +212,11 @@ mod tests {
         assert_eq!(dm_cache.read_word(0x14), Ok(0xDEADBEEF));
         assert_eq!(dm_cache.read_word(0x18), Ok(0xBEEFBEEF));
         assert_eq!(dm_cache.read_word(0x1C), Ok(0xF0));
+        assert_eq!(dm_cache.read_halfword(0x10), Ok(0x4567));
+        assert_eq!(dm_cache.read_halfword(0x12), Ok(0x0123));
+
+        assert_eq!(dm_cache.write_byte(0x10, 0x42), Ok(()));
+        assert_eq!(dm_cache.write_halfword(0x12, 0x4242), Ok(()));
+        assert_eq!(memory_ref.borrow_mut().read_word(0x10), Ok(0x42424542));
     }
 }
