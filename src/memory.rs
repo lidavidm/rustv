@@ -38,6 +38,8 @@ pub trait MemoryInterface {
     // fn prefetch(&mut self, address: isa::Address);
     // fn invalidate(&mut self, address: isa::Address);
 
+    fn is_address_accessible(&self, address: isa::Address) -> bool;
+
     fn read_word(&mut self, address: isa::Address) -> Result<isa::Word>;
     fn write_word(&mut self, address: isa::Address, value: isa::Word) -> Result<()>;
 
@@ -248,6 +250,10 @@ impl MemoryInterface for Memory {
 
     fn step(&mut self) {}
 
+    fn is_address_accessible(&self, address: isa::Address) -> bool {
+        ((address / 4) as usize) < self.memory.len()
+    }
+
     fn read_word(&mut self, address: isa::Address) -> Result<isa::Word> {
         // memory is word-addressed but addresses are byte-addressed
         self.memory.get((address / 4) as usize)
@@ -357,6 +363,13 @@ impl<'a> MemoryInterface for DirectMappedCache<'a> {
 
             set.fetch_request = None;
         }
+    }
+
+    fn is_address_accessible(&self, address: isa::Address) -> bool {
+        let (tag, index, _) = self.parse_address(address);
+        let ref set = self.cache[index as usize];
+
+        set.valid && set.tag == tag
     }
 
     fn read_word(&mut self, address: isa::Address) -> Result<isa::Word> {
