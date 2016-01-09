@@ -361,12 +361,14 @@ impl<'a> Core<'a> {
 }
 
 impl<'a, T: SyscallHandler> Simulator<'a, T> {
-    pub fn new(cores: Vec<Core<'a>>, memory: SharedMemory<'a>, syscall: T)
+    pub fn new(cores: Vec<Core<'a>>, memory: SharedMemory<'a>,
+               caches: Vec<SharedMemory<'a>>, syscall: T)
                -> Simulator<'a, T> {
         // TODO: initialize GP, registers (GP is in headers)
         Simulator {
             cores: cores,
             memory: memory,
+            caches: caches,
             syscall: syscall,
         }
     }
@@ -389,8 +391,11 @@ impl<'a, T: SyscallHandler> Simulator<'a, T> {
                 // TODO: trap
             }
 
-            core.cache.borrow_mut().step();
             ran = true;
+        }
+
+        for cache in self.caches.iter() {
+            cache.borrow_mut().step();
         }
 
         ran
