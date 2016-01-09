@@ -19,5 +19,5 @@ use trap;
 
 pub trait SyscallHandler {
     // Can't take cache because syscall can't stall
-    fn syscall(&mut self, registers: &mut RegisterFile) -> Option<trap::Trap>;
+    fn syscall(&mut self, core_id: usize, registers: &mut RegisterFile) -> Option<trap::Trap>;
 }

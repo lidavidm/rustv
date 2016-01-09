@@ -20,7 +20,8 @@ use register_file::RegisterFile;
 use syscall::SyscallHandler;
 use trap::Trap;
 
-pub struct Core<'a>{
+pub struct Core<'a> {
+    id: usize,
     pc: isa::Address,
     registers: RegisterFile,
     stall: u32,
@@ -34,16 +35,18 @@ pub struct Core<'a>{
 pub struct Simulator<'a, T: SyscallHandler> {
     cores: Vec<Core<'a>>,
     memory: SharedMemory<'a>,
+    caches: Vec<SharedMemory<'a>>,
     syscall: T,
 }
 
 impl<'a> Core<'a> {
     // TODO: take Rc<RefCell<>> to Memory as well?
-    pub fn new(entry: isa::Address, sp: isa::Address,
+    pub fn new(id: usize, entry: isa::Address, sp: isa::Address,
                cache: SharedMemory<'a>, mmu: Box<Mmu + 'a>) -> Core<'a> {
         let mut registers = RegisterFile::new();
         registers.write_word(isa::Register::X2, sp);
         Core {
+            id: id,
             pc: entry,
             registers: registers,
             stall: 0,
@@ -53,6 +56,10 @@ impl<'a> Core<'a> {
             cycle_count: 0,
             stall_count: 0,
         }
+    }
+
+    pub fn registers(&mut self) -> &mut RegisterFile {
+        &mut self.registers
     }
 
     fn step(&mut self, inst: isa::Instruction, system: &mut SyscallHandler) {
@@ -331,7 +338,7 @@ impl<'a> Core<'a> {
             },
             isa::opcodes::SYSTEM => match inst.i_imm() {
                 0x0 => {
-                    if let Some(trap) = system.syscall(&mut self.registers) {
+                    if let Some(trap) = system.syscall(self.id, &mut self.registers) {
                         self.trap(trap);
                     }
                 }
@@ -340,7 +347,8 @@ impl<'a> Core<'a> {
                 }
             },
             _ => {
-                panic!("Invalid opcode: 0x{:02X} at PC 0x{:X}", inst.opcode(), pc);
+                panic!("Invalid opcode: 0x{:02X} at PC 0x{:X} in instruction {:?}",
+                       inst.opcode(), pc, inst);
             }
         }
         self.pc += 4;
@@ -389,8 +397,9 @@ impl<'a, T: SyscallHandler> Simulator<'a, T> {
     }
 
     fn report(&self) {
-        for (i, core) in self.cores.iter().enumerate() {
-            println!("Core {}: stalled {} of {}", i, core.stall_count, core.cycle_count);
+        for core in self.cores.iter() {
+            println!("Core {}: stalled {} of {}",
+                     core.id, core.stall_count, core.cycle_count);
         }
     }
 
