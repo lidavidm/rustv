@@ -155,7 +155,7 @@ impl ReverseMmu {
 impl Mmu for ReverseMmu {
     fn translate(&self, address: isa::Address) -> isa::Address {
         let offset = address % 4;
-        (self.top - (address - offset)) + offset
+        (self.top - 4 - (address - offset)) + offset
     }
 }
 
