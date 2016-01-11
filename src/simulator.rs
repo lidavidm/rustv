@@ -112,9 +112,9 @@ impl<'a> Core<'a> {
                     isa::funct3::BEQ => rs1 == rs2,
                     isa::funct3::BNE => rs1 != rs2,
                     isa::funct3::BLT => (rs1 as isa::SignedWord) < (rs2 as isa::SignedWord),
-                    isa::funct3::BGE => (rs1 as isa::SignedWord) > (rs2 as isa::SignedWord),
+                    isa::funct3::BGE => (rs1 as isa::SignedWord) >= (rs2 as isa::SignedWord),
                     isa::funct3::BLTU => rs1 < rs2,
-                    isa::funct3::BGEU => rs1 > rs2,
+                    isa::funct3::BGEU => rs1 >= rs2,
                     _ => {
                         self.trap(Trap::IllegalInstruction {
                             address: pc,

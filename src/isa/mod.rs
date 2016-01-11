@@ -130,7 +130,7 @@ impl Instruction {
     }
 
     pub fn funct3(&self) -> u32 {
-        (self.word >> 12) & 0x3
+        (self.word >> 12) & 0x7
     }
 
     pub fn funct7(&self) -> u32 {
