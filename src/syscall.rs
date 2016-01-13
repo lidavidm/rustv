@@ -14,10 +14,12 @@
 // You should have received a copy of the GNU General Public License
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
+use memory::Mmu;
 use register_file::RegisterFile;
 use trap;
 
 pub trait SyscallHandler {
     // Can't take cache because syscall can't stall
-    fn syscall(&mut self, core_id: usize, registers: &mut RegisterFile) -> Option<trap::Trap>;
+    fn syscall(&mut self, core_id: usize,
+               registers: &mut RegisterFile, mmu: &Mmu) -> Option<trap::Trap>;
 }

@@ -338,7 +338,9 @@ impl<'a> Core<'a> {
             },
             isa::opcodes::SYSTEM => match inst.i_imm() {
                 0x0 => {
-                    if let Some(trap) = system.syscall(self.id, &mut self.registers) {
+                    let result = system.syscall(self.id, &mut self.registers,
+                                                &*self.mmu);
+                    if let Some(trap) = result {
                         self.trap(trap);
                     }
                 }
