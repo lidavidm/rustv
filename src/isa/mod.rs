@@ -115,6 +115,9 @@ pub trait IsaType {
     fn as_half_word(self) -> HalfWord;
     fn as_byte(self) -> Byte;
     fn as_address(self) -> Address;
+
+    /// Converts the type into bytes, LSB-first.
+    fn as_bytes(self) -> Vec<Byte>;
 }
 
 macro_rules! isa_utype {
@@ -148,6 +151,17 @@ macro_rules! isa_utype {
             fn as_address(self) -> Address {
                 self.as_word()
             }
+
+            fn as_bytes(self) -> Vec<Byte> {
+                use std::mem;
+
+                let mut bytes = vec![];
+                for offset in 0..mem::size_of::<$utype>() {
+                    bytes.push(Byte(((self.0 >> (8 * offset)) & 0xFF) as u8));
+                }
+
+                bytes
+            }
         }
 
         impl IsaType for $signed {
@@ -176,6 +190,17 @@ macro_rules! isa_utype {
 
             fn as_address(self) -> Address {
                 self.as_word()
+            }
+
+            fn as_bytes(self) -> Vec<Byte> {
+                use std::mem;
+
+                let mut bytes = vec![];
+                for offset in 0..mem::size_of::<$utype>() {
+                    bytes.push(Byte(((self.0 >> (8 * offset)) & 0xFF) as u8));
+                }
+
+                bytes
             }
         }
     }
