@@ -220,9 +220,9 @@ fn copy_u8_into_u32<T: Mmu>(mmu: &T, base: usize, src: &[u8], dst: &mut [u32]) {
 }
 
 impl Memory {
-    pub fn new(size: isa::Address) -> Memory {
+    pub fn new(size: usize) -> Memory {
         Memory {
-            memory: vec![0; size.0 as usize],
+            memory: vec![0; size as usize],
         }
     }
 

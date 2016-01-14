@@ -31,6 +31,7 @@ pub use elfloader_lib as elfloader;
 mod tests {
     #[test]
     fn cache_address_parsing() {
+        use isa::*;
         use memory::*;
         use std::rc::Rc;
         use std::cell::RefCell;
@@ -40,9 +41,9 @@ mod tests {
         let dm_cache_word = DirectMappedCache::new(4, 1, memory_ref.clone());
         let dm_cache_doubleword = DirectMappedCache::new(4, 2, memory_ref.clone());
 
-        assert_eq!(dm_cache_word.parse_address(0xFFFFFFFD),
+        assert_eq!(dm_cache_word.parse_address(Word(0xFFFFFFFD)),
                    (0xFFFFFFF, 3, 1));
-        assert_eq!(dm_cache_doubleword.parse_address(0xFFFFFFFD),
+        assert_eq!(dm_cache_doubleword.parse_address(Word(0xFFFFFFFD)),
                    (0x7FFFFFF, 3, 5));
     }
 
@@ -50,45 +51,48 @@ mod tests {
     fn memory_rw() {
         use std::rc::Rc;
         use std::cell::RefCell;
+
+        use isa::*;
         use memory::*;
 
         let size = 0xFF;
         let mut memory = Memory::new(size);
 
-        assert_eq!(memory.write_word(0, 0xF0),
+        assert_eq!(memory.write_word(Word(0), Word(0xF0)),
                    Err(MemoryError::InvalidAddress));
-        assert_eq!(memory.write_byte(0, 0xF0),
+        assert_eq!(memory.write_byte(Word(0), Byte(0xF0)),
                    Err(MemoryError::InvalidAddress));
-        assert_eq!(memory.write_byte(1, 0xF0),
+        assert_eq!(memory.write_byte(Word(1), Byte(0xF0)),
                    Err(MemoryError::InvalidAddress));
-        assert_eq!(memory.write_byte(2, 0xF0),
+        assert_eq!(memory.write_byte(Word(2), Byte(0xF0)),
                    Err(MemoryError::InvalidAddress));
-        assert_eq!(memory.write_byte(3, 0xF0),
+        assert_eq!(memory.write_byte(Word(3), Byte(0xF0)),
                    Err(MemoryError::InvalidAddress));
-        assert_eq!(memory.write_halfword(0, 0xF0),
+        assert_eq!(memory.write_halfword(Word(0), HalfWord(0xF0)),
                    Err(MemoryError::InvalidAddress));
-        assert_eq!(memory.write_halfword(2, 0xF0),
+        assert_eq!(memory.write_halfword(Word(2), HalfWord(0xF0)),
                    Err(MemoryError::InvalidAddress));
 
         for address in (4..size).step_by(4) {
-            assert_eq!(memory.write_word(address, 0xF0), Ok(()));
-            assert_eq!(memory.read_word(address), Ok(0xF0));
-            assert_eq!(memory.read_halfword(address), Ok(0xF0));
-            assert_eq!(memory.read_halfword(address + 2), Ok(0x0));
-            assert_eq!(memory.read_byte(address), Ok(0xF0));
-            assert_eq!(memory.read_byte(address + 1), Ok(0x0));
-            assert_eq!(memory.read_byte(address + 2), Ok(0x0));
-            assert_eq!(memory.read_byte(address + 3), Ok(0x0));
+            let address = Word(address as u32);
+            assert_eq!(memory.write_word(address, Word(0xF0)), Ok(()));
+            assert_eq!(memory.read_word(address), Ok(Word(0xF0)));
+            assert_eq!(memory.read_halfword(address), Ok(HalfWord(0xF0)));
+            assert_eq!(memory.read_halfword(address + 2), Ok(HalfWord(0x0)));
+            assert_eq!(memory.read_byte(address), Ok(Byte(0xF0)));
+            assert_eq!(memory.read_byte(address + 1), Ok(Byte(0x0)));
+            assert_eq!(memory.read_byte(address + 2), Ok(Byte(0x0)));
+            assert_eq!(memory.read_byte(address + 3), Ok(Byte(0x0)));
         }
 
-        assert_eq!(memory.write_word(0x10, 0x01234567), Ok(()));
-        assert_eq!(memory.write_word(0x14, 0xDEADBEEF), Ok(()));
-        assert_eq!(memory.read_byte(0x10), Ok(0x67));
-        assert_eq!(memory.read_byte(0x11), Ok(0x45));
-        assert_eq!(memory.read_byte(0x12), Ok(0x23));
-        assert_eq!(memory.read_byte(0x13), Ok(0x01));
-        assert_eq!(memory.read_halfword(0x10), Ok(0x4567));
-        assert_eq!(memory.read_halfword(0x12), Ok(0x0123));
+        assert_eq!(memory.write_word(Word(0x10), Word(0x01234567)), Ok(()));
+        assert_eq!(memory.write_word(Word(0x14), Word(0xDEADBEEF)), Ok(()));
+        assert_eq!(memory.read_byte(Word(0x10)), Ok(Byte(0x67)));
+        assert_eq!(memory.read_byte(Word(0x11)), Ok(Byte(0x45)));
+        assert_eq!(memory.read_byte(Word(0x12)), Ok(Byte(0x23)));
+        assert_eq!(memory.read_byte(Word(0x13)), Ok(Byte(0x01)));
+        assert_eq!(memory.read_halfword(Word(0x10)), Ok(HalfWord(0x4567)));
+        assert_eq!(memory.read_halfword(Word(0x12)), Ok(HalfWord(0x0123)));
 
         let stall = Err(MemoryError::CacheMiss {
             stall_cycles: memory.latency(),
@@ -100,43 +104,43 @@ mod tests {
         let memory_ref = Rc::new(RefCell::new(memory));
         let mut dm_cache = DirectMappedCache::new(4, 4, memory_ref.clone());
 
-        assert_eq!(dm_cache.read_word(0x10), stall);
+        assert_eq!(dm_cache.read_word(Word(0x10)), stall);
 
         for _ in 0..100 {
             dm_cache.step();
         }
 
-        assert_eq!(dm_cache.write_word(0x20, 0x123), write_stall);
-        assert_eq!(dm_cache.read_word(0x10), Ok(0x01234567));
-        assert_eq!(dm_cache.read_word(0x14), Ok(0xDEADBEEF));
-        assert_eq!(dm_cache.read_word(0x18), Ok(0xF0));
-        assert_eq!(dm_cache.read_word(0x1C), Ok(0xF0));
-        assert_eq!(dm_cache.read_byte(0x10), Ok(0x67));
-        assert_eq!(dm_cache.read_byte(0x11), Ok(0x45));
-        assert_eq!(dm_cache.read_byte(0x12), Ok(0x23));
-        assert_eq!(dm_cache.read_byte(0x13), Ok(0x01));
-        assert_eq!(dm_cache.write_word(0x18, 0xBEEFBEEF), Ok(()));
-        assert_eq!(dm_cache.read_word(0x18), Ok(0xBEEFBEEF));
-        assert_eq!(dm_cache.read_halfword(0x10), Ok(0x4567));
-        assert_eq!(dm_cache.read_halfword(0x12), Ok(0x0123));
-        assert_eq!(memory_ref.borrow_mut().read_word(0x18), Ok(0xBEEFBEEF));
+        assert_eq!(dm_cache.write_word(Word(0x20), Word(0x123)), write_stall);
+        assert_eq!(dm_cache.read_word(Word(0x10)), Ok(Word(0x01234567)));
+        assert_eq!(dm_cache.read_word(Word(0x14)), Ok(Word(0xDEADBEEF)));
+        assert_eq!(dm_cache.read_word(Word(0x18)), Ok(Word(0xF0)));
+        assert_eq!(dm_cache.read_word(Word(0x1C)), Ok(Word(0xF0)));
+        assert_eq!(dm_cache.read_byte(Word(0x10)), Ok(Byte(0x67)));
+        assert_eq!(dm_cache.read_byte(Word(0x11)), Ok(Byte(0x45)));
+        assert_eq!(dm_cache.read_byte(Word(0x12)), Ok(Byte(0x23)));
+        assert_eq!(dm_cache.read_byte(Word(0x13)), Ok(Byte(0x01)));
+        assert_eq!(dm_cache.write_word(Word(0x18), Word(0xBEEFBEEF)), Ok(()));
+        assert_eq!(dm_cache.read_word(Word(0x18)), Ok(Word(0xBEEFBEEF)));
+        assert_eq!(dm_cache.read_halfword(Word(0x10)), Ok(HalfWord(0x4567)));
+        assert_eq!(dm_cache.read_halfword(Word(0x12)), Ok(HalfWord(0x0123)));
+        assert_eq!(memory_ref.borrow_mut().read_word(Word(0x18)), Ok(Word(0xBEEFBEEF)));
 
         for _ in 0..100 {
             dm_cache.step();
         }
 
-        assert_eq!(dm_cache.write_word(0x20, 0x123), Ok(()));
-        assert_eq!(memory_ref.borrow_mut().read_word(0x20), Ok(0x123));
+        assert_eq!(dm_cache.write_word(Word(0x20), Word(0x123)), Ok(()));
+        assert_eq!(memory_ref.borrow_mut().read_word(Word(0x20)), Ok(Word(0x123)));
         // Should not have been evicted
-        assert_eq!(dm_cache.read_word(0x10), Ok(0x01234567));
-        assert_eq!(dm_cache.read_word(0x14), Ok(0xDEADBEEF));
-        assert_eq!(dm_cache.read_word(0x18), Ok(0xBEEFBEEF));
-        assert_eq!(dm_cache.read_word(0x1C), Ok(0xF0));
-        assert_eq!(dm_cache.read_halfword(0x10), Ok(0x4567));
-        assert_eq!(dm_cache.read_halfword(0x12), Ok(0x0123));
+        assert_eq!(dm_cache.read_word(Word(0x10)), Ok(Word(0x01234567)));
+        assert_eq!(dm_cache.read_word(Word(0x14)), Ok(Word(0xDEADBEEF)));
+        assert_eq!(dm_cache.read_word(Word(0x18)), Ok(Word(0xBEEFBEEF)));
+        assert_eq!(dm_cache.read_word(Word(0x1C)), Ok(Word(0xF0)));
+        assert_eq!(dm_cache.read_halfword(Word(0x10)), Ok(HalfWord(0x4567)));
+        assert_eq!(dm_cache.read_halfword(Word(0x12)), Ok(HalfWord(0x0123)));
 
-        assert_eq!(dm_cache.write_byte(0x10, 0x42), Ok(()));
-        assert_eq!(dm_cache.write_halfword(0x12, 0x4242), Ok(()));
-        assert_eq!(memory_ref.borrow_mut().read_word(0x10), Ok(0x42424542));
+        assert_eq!(dm_cache.write_byte(Word(0x10), Byte(0x42)), Ok(()));
+        assert_eq!(dm_cache.write_halfword(Word(0x12), HalfWord(0x4242)), Ok(()));
+        assert_eq!(memory_ref.borrow_mut().read_word(Word(0x10)), Ok(Word(0x42424542)));
     }
 }
