@@ -15,6 +15,7 @@
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
 use isa;
+use isa::IsaType;
 use memory::{MemoryInterface, MemoryError, Mmu, SharedMemory};
 use register_file::RegisterFile;
 use syscall::SyscallHandler;
@@ -75,19 +76,19 @@ impl<'a> Core<'a> {
 
         match inst.opcode() {
             isa::opcodes::LUI => {
-                self.registers.write_word(inst.rd(), inst.u_imm() as isa::Word)
+                self.registers.write_word(inst.rd(), inst.u_imm().as_word())
             },
             isa::opcodes::AUIPC => {
-                let result = (pc as isa::SignedWord) + inst.u_imm();
-                self.registers.write_word(inst.rd(), result as isa::Word);
+                let result = (pc.as_signed_word()) + inst.u_imm();
+                self.registers.write_word(inst.rd(), result.as_word());
             },
             isa::opcodes::JALR => {
                 // TODO: assert funct3 is 0
                 let base = self.registers.read_word(inst.rs1())
-                    as isa::SignedWord;
-                let target = (base + inst.i_imm()) as isa::Address;
-                let retval = (pc + 4) as isa::Word;
-                if target == 0x0 {
+                   .as_signed_word();
+                let target = (base + inst.i_imm()).as_address();
+                let retval = (pc + 4).as_word();
+                if target == isa::Word(0x0) {
                     // ret
                     self.running = false;
                 }
@@ -98,21 +99,21 @@ impl<'a> Core<'a> {
                 }
             },
             isa::opcodes::JAL => {
-                let target = ((pc as isa::SignedWord) + inst.uj_imm()) as isa::Address;
-                self.registers.write_word(inst.rd(), (pc + 4) as isa::Word);
+                let target = ((pc.as_signed_word()) + inst.uj_imm()).as_address();
+                self.registers.write_word(inst.rd(), (pc + 4).as_word());
                 self.pc = target;
                 // panic!("JAL to {:X} 0x{:X}", pc, target);
                 return;
             }
             isa::opcodes::BRANCH => {
-                let target = ((pc as isa::SignedWord) + inst.sb_imm()) as isa::Address;
+                let target = ((pc.as_signed_word()) + inst.sb_imm()).as_address();
                 let rs1 = self.registers.read_word(inst.rs1());
                 let rs2 = self.registers.read_word(inst.rs2());
                 if match inst.funct3() {
                     isa::funct3::BEQ => rs1 == rs2,
                     isa::funct3::BNE => rs1 != rs2,
-                    isa::funct3::BLT => (rs1 as isa::SignedWord) < (rs2 as isa::SignedWord),
-                    isa::funct3::BGE => (rs1 as isa::SignedWord) >= (rs2 as isa::SignedWord),
+                    isa::funct3::BLT => (rs1.as_signed_word()) < (rs2.as_signed_word()),
+                    isa::funct3::BGE => (rs1.as_signed_word()) >= (rs2.as_signed_word()),
                     isa::funct3::BLTU => rs1 < rs2,
                     isa::funct3::BGEU => rs1 >= rs2,
                     _ => {
@@ -129,37 +130,37 @@ impl<'a> Core<'a> {
             },
             isa::opcodes::INTEGER_IMMEDIATE => {
                 let imm = inst.i_imm();
-                let src = self.registers.read_word(inst.rs1()) as isa::SignedWord;
+                let src = self.registers.read_word(inst.rs1()).as_signed_word();
                 if let Some(value) = match inst.funct3() {
                     isa::funct3::ADDI => {
-                        Some(src.wrapping_add(imm) as isa::Word)
+                        Some(src.wrapping_add(imm).as_word())
                     },
                     isa::funct3::SLLI => {
-                        Some((src << inst.shamt()) as isa::Word)
+                        Some((src.as_word() << inst.shamt()))
                     },
                     isa::funct3::SLTI => {
                         if src < imm {
-                            Some(1)
+                            Some(isa::Word(1))
                         }
                         else {
-                            Some(0)
+                            Some(isa::Word(0))
                         }
                     },
                     isa::funct3::SLTIU => {
-                        if (src as isa::Word) < (imm as isa::Word) {
-                            Some(1)
+                        if (src.as_word()) < (imm.as_word()) {
+                            Some(isa::Word(1))
                         }
                         else {
-                            Some(0)
+                            Some(isa::Word(0))
                         }
                     },
                     isa::funct3::XORI => {
-                        Some((src ^ imm) as isa::Word)
+                        Some((src ^ imm).as_word())
                     },
                     isa::funct3::SRLI_SRAI => {
                         match inst.funct7() {
-                            isa::funct7::SRLI => Some(((src as isa::Word) >> inst.shamt()) as isa::Word),
-                            isa::funct7::SRAI => Some((src >> inst.shamt()) as isa::Word),
+                            isa::funct7::SRLI => Some(((src.as_word()) >> inst.shamt()).as_word()),
+                            isa::funct7::SRAI => Some((src >> inst.shamt() as i32).as_word()),
                             _ => {
                                 self.trap(Trap::IllegalInstruction {
                                     address: pc,
@@ -170,10 +171,10 @@ impl<'a> Core<'a> {
                         }
                     },
                     isa::funct3::ORI => {
-                        Some((src | imm) as isa::Word)
+                        Some((src | imm).as_word())
                     },
                     isa::funct3::ANDI => {
-                        Some((src & imm) as isa::Word)
+                        Some((src & imm).as_word())
                     },
                     _ => {
                         self.trap(Trap::IllegalInstruction {
@@ -193,8 +194,8 @@ impl<'a> Core<'a> {
                 if let Some(value) = match inst.funct3() {
                     isa::funct3::ADD_SUB => {
                         match inst.funct7() {
-                            isa::funct7::ADD_SRL => Some(((src1 as isa::SignedWord).wrapping_add(src2 as isa::SignedWord)) as isa::Word),
-                            isa::funct7::SUB_SRA => Some(((src1 as isa::SignedWord).wrapping_sub(src2 as isa::SignedWord)) as isa::Word),
+                            isa::funct7::ADD_SRL => Some(((src1.as_signed_word()).wrapping_add(src2.as_signed_word())).as_word()),
+                            isa::funct7::SUB_SRA => Some(((src1.as_signed_word()).wrapping_sub(src2.as_signed_word())).as_word()),
                             _ => {
                                 self.trap(Trap::IllegalInstruction {
                                     address: pc,
@@ -208,19 +209,19 @@ impl<'a> Core<'a> {
                         Some(src1 << src2_shift)
                     },
                     isa::funct3::SLT => {
-                        if (src1 as isa::SignedWord) < (src2 as isa::SignedWord) {
-                            Some(1)
+                        if (src1.as_signed_word()) < (src2.as_signed_word()) {
+                            Some(isa::Word(1))
                         }
                         else {
-                            Some(0)
+                            Some(isa::Word(0))
                         }
                     },
                     isa::funct3::SLTU => {
                         if src1 < src2 {
-                            Some(1)
+                            Some(isa::Word(1))
                         }
                         else {
-                            Some(0)
+                            Some(isa::Word(0))
                         }
                     },
                     isa::funct3::XOR => {
@@ -229,7 +230,9 @@ impl<'a> Core<'a> {
                     isa::funct3::SRL_SRA => {
                         match inst.funct7() {
                             isa::funct7::ADD_SRL => Some(src1 >> src2_shift),
-                            isa::funct7::SUB_SRA => Some(((src1 as isa::SignedWord) >> src2_shift) as isa::Word),
+                            isa::funct7::SUB_SRA =>
+                                Some(((src1.as_signed_word()) >>
+                                      src2_shift.as_signed_word()).as_word()),
                             _ => {
                                 self.trap(Trap::IllegalInstruction {
                                     address: pc,
@@ -259,28 +262,28 @@ impl<'a> Core<'a> {
             isa::opcodes::LOAD => {
                 let imm = inst.i_imm();
                 let base = self.registers.read_word(inst.rs1());
-                let address = ((base as isa::SignedWord) + imm) as isa::Address;
+                let address = ((base.as_signed_word()) + imm).as_address();
                 let address = self.mmu.translate(address);
 
                 let result = match inst.funct3() {
                     isa::funct3::LB =>
                         self.cache.borrow_mut()
                         .read_byte(address)
-                        .map(|b| (b as isa::SignedByte) as isa::Word),
+                        .map(|b| b.as_signed_word().as_word()),
                     isa::funct3::LH =>
                         self.cache.borrow_mut()
                         .read_halfword(address)
-                        .map(|b| (b as isa::SignedHalfWord) as isa::Word),
+                        .map(|b| b.as_signed_word().as_word()),
                     isa::funct3::LW =>
                         self.cache.borrow_mut().read_word(address),
                     isa::funct3::LBU =>
                         self.cache.borrow_mut()
                         .read_byte(address)
-                        .map(|b| b as isa::Word),
+                        .map(|b| b.as_word()),
                     isa::funct3::LHU =>
                         self.cache.borrow_mut()
                         .read_halfword(address)
-                        .map(|b| b as isa::Word),
+                        .map(|b| b.as_word()),
                     _ => panic!("{:x}: Invalid load funct3code: 0x{:x}",
                                 pc, inst.funct3()),
                 };
@@ -304,16 +307,16 @@ impl<'a> Core<'a> {
                 let imm = inst.s_imm();
                 let base = self.registers.read_word(inst.rs1());
                 let val = self.registers.read_word(inst.rs2());
-                let address = ((base as isa::SignedWord) + imm) as isa::Address;
+                let address = ((base.as_signed_word()) + imm).as_address();
                 let address = self.mmu.translate(address);
 
                 let result = match inst.funct3() {
                     isa::funct3::SB =>
                         self.cache.borrow_mut()
-                        .write_byte(address, val as isa::Byte),
+                        .write_byte(address, val.as_byte()),
                     isa::funct3::SH =>
                         self.cache.borrow_mut()
-                        .write_halfword(address, val as isa::HalfWord),
+                        .write_halfword(address, val.as_half_word()),
                     isa::funct3::SW =>
                         self.cache.borrow_mut().write_word(address, val),
                     _ => panic!("PC {:x}: Invalid store funct3code: 0x{:x}",
@@ -337,7 +340,7 @@ impl<'a> Core<'a> {
                 }
             },
             isa::opcodes::SYSTEM => match inst.i_imm() {
-                0x0 => {
+                isa::SignedWord(0x0) => {
                     let result = system.syscall(self.id, &mut self.registers,
                                                 &*self.mmu);
                     if let Some(trap) = result {

@@ -14,11 +14,11 @@
 // You should have received a copy of the GNU General Public License
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
-#![feature(braced_empty_structs, step_by)]
+#![feature(augmented_assignments, braced_empty_structs,
+           op_assign_traits, step_by)]
 extern crate elfloader32 as elfloader_lib;
 
 pub mod isa;
-pub mod binary;
 pub mod memory;
 pub mod register_file;
 pub mod simulator;

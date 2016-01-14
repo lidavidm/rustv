@@ -14,18 +14,178 @@
 // You should have received a copy of the GNU General Public License
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
+use std::fmt;
+use std::ops;
+
 pub mod opcodes;
 pub mod funct3;
 pub mod funct7;
 
-pub type Word = u32;
-pub type SignedWord = i32;
-pub type HalfWord = u16;
-pub type SignedHalfWord = i16;
-pub type Byte = u8;
-pub type SignedByte = i8;
+macro_rules! isa_type_op {
+    ($name: ident, $ty: ty, $op: ident, $op_name: ident) => {
+        impl ops::$op<$name> for $name {
+            type Output = $name;
 
-pub type Address = u32;
+            fn $op_name(self, _rhs: $name) -> $name {
+                $name(ops::$op::$op_name(self.0, _rhs.0))
+            }
+        }
+
+        impl ops::$op<$ty> for $name {
+            type Output = $name;
+
+            fn $op_name(self, _rhs: $ty) -> $name {
+                $name(ops::$op::$op_name(self.0, _rhs))
+            }
+        }
+    }
+}
+
+macro_rules! isa_type_assign_op {
+    ($name: ident, $ty: ty, $op: ident, $op_name: ident) => {
+        impl ops::$op<$name> for $name {
+            fn $op_name(&mut self, _rhs: $name) {
+                ops::$op::$op_name(&mut self.0, _rhs.0)
+            }
+        }
+
+        impl ops::$op<$ty> for $name {
+            fn $op_name(&mut self, _rhs: $ty) {
+                ops::$op::$op_name(&mut self.0, _rhs)
+            }
+        }
+    }
+}
+
+macro_rules! isa_type {
+    ($name: ident, $utype: ty) => {
+        #[derive(Clone,Copy,Debug,Eq,Ord,PartialEq,PartialOrd)]
+        pub struct $name(pub $utype);
+
+        impl $name {
+            pub fn wrapping_add(self, rhs: Self) -> Self {
+                $name(self.0.wrapping_add(rhs.0))
+            }
+
+            pub fn wrapping_sub(self, rhs: Self) -> Self {
+                $name(self.0.wrapping_sub(rhs.0))
+            }
+
+        }
+
+        isa_type_op!($name, $utype, Add, add);
+        isa_type_assign_op!($name, $utype, AddAssign, add_assign);
+        isa_type_op!($name, $utype, Sub, sub);
+        isa_type_op!($name, $utype, Mul, mul);
+        isa_type_op!($name, $utype, Div, div);
+        isa_type_op!($name, $utype, Rem, rem);
+        isa_type_op!($name, $utype, Shr, shr);
+        isa_type_op!($name, $utype, Shl, shl);
+        isa_type_op!($name, $utype, BitAnd, bitand);
+        isa_type_op!($name, $utype, BitOr, bitor);
+        isa_type_op!($name, $utype, BitXor, bitxor);
+
+        impl fmt::LowerHex for $name {
+            fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+                write!(f, "{:x}", self.0)
+            }
+        }
+
+        impl fmt::UpperHex for $name {
+            fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+                write!(f, "{:X}", self.0)
+            }
+        }
+    }
+}
+
+pub trait IsaType {
+    type Unsigned;
+    type Signed;
+
+    fn as_signed(self) -> Self::Signed;
+    fn as_signed_word(self) -> SignedWord;
+    fn as_word(self) -> Word;
+    fn as_half_word(self) -> HalfWord;
+    fn as_byte(self) -> Byte;
+    fn as_address(self) -> Address;
+}
+
+macro_rules! isa_utype {
+    ($name: ident, $signed: ident, $utype: ty, $stype: ty) => {
+        impl IsaType for $name {
+            type Unsigned = $name;
+            type Signed = $signed;
+
+            fn as_signed(self) -> Self::Signed {
+                $signed(self.0 as $stype)
+            }
+
+            fn as_signed_word(self) -> SignedWord {
+                // Convert self to signed so that second cast will
+                // sign-extend
+                SignedWord((self.0 as $stype) as i32)
+            }
+
+            fn as_word(self) -> Word {
+                Word(self.0 as u32)
+            }
+
+            fn as_half_word(self) -> HalfWord {
+                HalfWord(self.0 as u16)
+            }
+
+            fn as_byte(self) -> Byte {
+                Byte(self.0 as u8)
+            }
+
+            fn as_address(self) -> Address {
+                self.as_word()
+            }
+        }
+
+        impl IsaType for $signed {
+            type Unsigned = $name;
+            type Signed = $signed;
+
+            fn as_signed(self) -> Self::Signed {
+                self
+            }
+
+            fn as_signed_word(self) -> SignedWord {
+                SignedWord(self.0 as i32)
+            }
+
+            fn as_word(self) -> Word {
+                Word(self.0 as u32)
+            }
+
+            fn as_half_word(self) -> HalfWord {
+                HalfWord(self.0 as u16)
+            }
+
+            fn as_byte(self) -> Byte {
+                Byte(self.0 as u8)
+            }
+
+            fn as_address(self) -> Address {
+                self.as_word()
+            }
+        }
+    }
+}
+
+isa_type!(Word, u32);
+isa_type!(SignedWord, i32);
+isa_utype!(Word, SignedWord, u32, i32);
+isa_type!(HalfWord, u16);
+isa_type!(SignedHalfWord, i16);
+isa_utype!(HalfWord, SignedHalfWord, u16, i16);
+isa_type!(Byte, u8);
+isa_type!(SignedByte, i8);
+isa_utype!(Byte, SignedByte, u8, i8);
+
+pub type Address = Word;
 
 #[derive(Debug, PartialEq)]
 pub enum Register {
@@ -111,52 +271,52 @@ impl Register {
 pub struct Instruction {
     // TODO: rename word to something correct - instructions are not always a
     // word
-    word: u32,
+    word: Word,
 }
 
 impl Instruction {
-    pub fn new(word: u32) -> Instruction {
+    pub fn new(word: Word) -> Instruction {
         Instruction {
             word: word,
         }
     }
 
     pub fn opcode(&self) -> u32 {
-        self.word & 0x7F
+        (self.word & 0x7F).0
     }
 
     pub fn rd(&self) -> Register {
-        Register::from_num((self.word >> 7) & 0x1F)
+        Register::from_num(((self.word >> 7) & 0x1F).0)
     }
 
     pub fn funct3(&self) -> u32 {
-        (self.word >> 12) & 0x7
+        ((self.word >> 12) & 0x7).0
     }
 
     pub fn funct7(&self) -> u32 {
-        (self.word >> 25) & 0x7F
+        ((self.word >> 25) & 0x7F).0
     }
 
     pub fn shamt(&self) -> u32 {
-        (self.word >> 20) & 0x1F
+        ((self.word >> 20) & 0x1F).0
     }
 
     pub fn rs1(&self) -> Register {
-        Register::from_num((self.word >> 15) & 0x1F)
+        Register::from_num(((self.word >> 15) & 0x1F).0)
     }
 
     pub fn rs2(&self) -> Register {
-        Register::from_num((self.word >> 20) & 0x1F)
+        Register::from_num(((self.word >> 20) & 0x1F).0)
     }
 
     pub fn i_imm(&self) -> SignedWord {
-        (self.word as SignedWord) >> 20
+        (self.word.as_signed_word()) >> 20
     }
 
     pub fn s_imm(&self) -> SignedWord {
         let low = (self.word >> 7) & 0x1F;
-        let high = ((self.word as SignedWord) >> 25) as Word;
-        ((high << 5) | low) as SignedWord
+        let high = ((self.word.as_signed_word()) >> 25).as_word();
+        ((high << 5) | low).as_signed_word()
     }
 
     pub fn uj_imm(&self) -> SignedWord {
@@ -165,19 +325,19 @@ impl Instruction {
         let low11 = (self.word >> 20) & 0x1;
         let low12 = (self.word >> 12) & 0xFF;
         // Want sign-extension
-        let low20 = ((self.word as SignedWord) >> 30) as Word;
-        ((low20 << 20) | (low12 << 12) | (low11 << 11) | (low1 << 1)) as SignedWord
+        let low20 = ((self.word.as_signed_word()) >> 30).as_word();
+        ((low20 << 20) | (low12 << 12) | (low11 << 11) | (low1 << 1)).as_signed_word()
     }
 
     pub fn sb_imm(&self) -> SignedWord {
         let low1 = (self.word >> 8) & 0xF;
         let low5 = (self.word >> 25) & 0x3F;
         let low11 = (self.word >> 7) & 0x1;
-        let low12 = ((self.word as SignedWord) >> 31) as Word;
-        ((low12 << 12) | (low11 << 11) | (low5 << 5) | (low1 << 1)) as SignedWord
+        let low12 = ((self.word.as_signed_word()) >> 31).as_word();
+        ((low12 << 12) | (low11 << 11) | (low5 << 5) | (low1 << 1)).as_signed_word()
     }
 
     pub fn u_imm(&self) -> SignedWord {
-        (self.word & 0xFFFFF000) as SignedWord
+        (self.word & 0xFFFFF000).as_signed_word()
     }
 }

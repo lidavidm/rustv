@@ -23,7 +23,7 @@ pub struct RegisterFile {
 impl RegisterFile {
     pub fn new() -> RegisterFile {
         RegisterFile {
-            registers: [0; 32],
+            registers: [isa::Word(0); 32],
         }
     }
 

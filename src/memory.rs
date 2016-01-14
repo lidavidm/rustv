@@ -17,8 +17,7 @@
 use std::rc::Rc;
 use std::cell::RefCell;
 
-use isa::{self, Instruction};
-use binary::{Binary};
+use isa::{self, Instruction, IsaType};
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum MemoryError {
@@ -54,12 +53,12 @@ pub trait MemoryInterface {
 
     fn read_halfword(&mut self, address: isa::Address) -> Result<isa::HalfWord> {
         let result = self.read_word(address);
-        let offset = address & 0b10;
+        let offset = (address & 0b10).0;
 
         match result {
             Ok(word) => match offset {
-                0 => Ok((word & 0xFFFF) as isa::HalfWord),
-                2 => Ok(((word & 0xFFFF0000) >> 16) as isa::HalfWord),
+                0 => Ok((word & 0xFFFF).as_half_word()),
+                2 => Ok(((word & 0xFFFF0000) >> 16).as_half_word()),
                 _ => panic!("Invalid halfword offset: address {:x}", address),
             },
             Err(e) => Err(e),
@@ -68,8 +67,8 @@ pub trait MemoryInterface {
 
     fn write_halfword(&mut self, address: isa::Address, value: isa::HalfWord) -> Result<()> {
         let result = self.read_word(address);
-        let offset = address & 0b10;
-        let value = value as isa::Word;
+        let offset = (address & 0b10).0;
+        let value = value.as_word();
 
         match result {
             Ok(word) => {
@@ -86,14 +85,14 @@ pub trait MemoryInterface {
 
     fn read_byte(&mut self, address: isa::Address) -> Result<isa::Byte> {
         let result = self.read_word(address);
-        let offset = address % 4;
+        let offset = (address % 4).0;
 
         match result {
             Ok(word) => match offset {
-                0 => Ok((word & 0xFF) as isa::Byte),
-                1 => Ok(((word & 0xFF00) >> 8) as isa::Byte),
-                2 => Ok(((word & 0xFF0000) >> 16) as isa::Byte),
-                3 => Ok(((word & 0xFF000000) >> 24) as isa::Byte),
+                0 => Ok((word & 0xFF).as_byte()),
+                1 => Ok(((word & 0xFF00) >> 8).as_byte()),
+                2 => Ok(((word & 0xFF0000) >> 16).as_byte()),
+                3 => Ok(((word & 0xFF000000) >> 24).as_byte()),
                 _ => panic!("Invalid byte offset: {:x}", address),
             },
             Err(e) => Err(e),
@@ -102,8 +101,8 @@ pub trait MemoryInterface {
 
     fn write_byte(&mut self, address: isa::Address, value: isa::Byte) -> Result<()> {
         let result = self.read_word(address);
-        let offset = address % 4;
-        let value = value as isa::Word;
+        let offset = (address % 4).0;
+        let value = value.as_word();
 
         match result {
             Ok(word) => {
@@ -169,7 +168,7 @@ struct FetchRequest {
     prefetch: bool, // is this a prefetch
     cycles_left: u32,
     tag: u32,
-    data: Vec<u32>, // hold data temporarily while we wait for an entire line
+    data: Vec<isa::Word>, // hold data temporarily while we wait for an entire line
     error: Option<MemoryError>, // in case next level returns an error
     waiting_on: u32, // which word of the block are we waiting on
 }
@@ -178,7 +177,7 @@ struct FetchRequest {
 struct CacheBlock {
     valid: bool,
     tag: u32,
-    contents: Vec<u32>,
+    contents: Vec<isa::Word>,
     fetch_request: Option<FetchRequest>,
 }
 
@@ -214,27 +213,16 @@ fn copy_u8_into_u32<T: Mmu>(mmu: &T, base: usize, src: &[u8], dst: &mut [u32]) {
             word[0] as u32
         };
 
-        let addr = mmu.translate((base as isa::Address) + ((4 * offset) as isa::Address)) / 4;
-        dst[addr as usize] = word;
+        let addr = isa::Word((base as u32) + ((4 * offset) as u32));
+        let addr = mmu.translate(addr) / 4;
+        dst[addr.0 as usize] = word;
     }
 }
 
 impl Memory {
     pub fn new(size: isa::Address) -> Memory {
         Memory {
-            memory: vec![0; size as usize],
-        }
-    }
-
-    pub fn new_from_binary(size: isa::Address, binary: Binary) -> Memory {
-        let mut memory = binary.words.clone();
-        let size = size as usize;
-        if size > memory.len() {
-            let remainder = size - memory.len();
-            memory.reserve(remainder);
-        }
-        Memory {
-            memory: memory,
+            memory: vec![0; size.0 as usize],
         }
     }
 
@@ -252,31 +240,33 @@ impl MemoryInterface for Memory {
     fn step(&mut self) {}
 
     fn is_address_accessible(&self, address: isa::Address) -> bool {
-        ((address / 4) as usize) < self.memory.len()
+        ((address / 4).0 as usize) < self.memory.len()
     }
 
     fn read_word(&mut self, address: isa::Address) -> Result<isa::Word> {
         // memory is word-addressed but addresses are byte-addressed
-        self.memory.get((address / 4) as usize)
+        self.memory.get((address / 4).0 as usize)
             .map(Clone::clone)
+            .map(isa::Word)
             .ok_or(MemoryError::InvalidAddress)
     }
 
     fn write_word(&mut self, address: isa::Address, value: isa::Word)
                   -> Result<()> {
-        let address = (address / 4) as usize;
+        let address = (address / 4).0 as usize;
         if address >= self.memory.len() || address <= 0 {
             Err(MemoryError::InvalidAddress)
         }
         else {
-            self.memory[address] = value;
+            self.memory[address] = value.0;
             Ok(())
         }
     }
 
     fn read_instruction(&mut self, pc: isa::Address) -> Option<Instruction> {
-        self.memory.get((pc / 4) as usize)
+        self.memory.get((pc / 4).0 as usize)
             .map(Clone::clone)
+            .map(isa::Word)
             .map(Instruction::new)
     }
 }
@@ -287,7 +277,7 @@ impl<'a> DirectMappedCache<'a> {
         let set = CacheBlock {
             valid: false,
             tag: 0,
-            contents: vec![0; block_words as usize],
+            contents: vec![isa::Word(0); block_words as usize],
             fetch_request: None,
         };
         DirectMappedCache {
@@ -308,7 +298,7 @@ impl<'a> DirectMappedCache<'a> {
         let tag_shift = index_shift + (32 - self.num_sets.leading_zeros()) - 1;
         let tag = address >> tag_shift;
 
-        (tag, index, offset)
+        (tag.0, index.0, offset.0)
     }
 
     fn normalize_address(&self, address: isa::Address) -> isa::Address {
@@ -389,7 +379,7 @@ impl<'a> MemoryInterface for DirectMappedCache<'a> {
                 prefetch: false,
                 cycles_left: stall,
                 tag: new_tag,
-                data: vec![0; self.block_words as usize],
+                data: vec![isa::Word(0); self.block_words as usize],
                 error: None,
                 waiting_on: 0,
             });
