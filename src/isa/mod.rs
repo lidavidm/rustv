@@ -59,7 +59,7 @@ macro_rules! isa_type_assign_op {
 
 macro_rules! isa_type {
     ($name: ident, $utype: ty) => {
-        #[derive(Clone,Copy,Debug,Eq,Ord,PartialEq,PartialOrd)]
+        #[derive(Clone,Copy,Debug,Eq,Hash,Ord,PartialEq,PartialOrd)]
         pub struct $name(pub $utype);
 
         impl $name {
@@ -84,6 +84,12 @@ macro_rules! isa_type {
         isa_type_op!($name, $utype, BitAnd, bitand);
         isa_type_op!($name, $utype, BitOr, bitor);
         isa_type_op!($name, $utype, BitXor, bitxor);
+
+        impl fmt::Display for $name {
+            fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
+                write!(f, "{}", self.0)
+            }
+        }
 
         impl fmt::LowerHex for $name {
             fn fmt(&self, f: &mut fmt::Formatter) -> Result<(), fmt::Error> {
