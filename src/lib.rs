@@ -96,9 +96,11 @@ mod tests {
 
         let stall = Err(MemoryError::CacheMiss {
             stall_cycles: memory.latency(),
+            retry: true,
         });
         let write_stall = Err(MemoryError::CacheMiss {
             stall_cycles: memory.latency(),
+            retry: true,
         });
 
         let memory_ref = Rc::new(RefCell::new(memory));

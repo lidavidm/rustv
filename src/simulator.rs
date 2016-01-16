@@ -290,9 +290,11 @@ impl<'a> Core<'a> {
 
                 match result {
                     Ok(value) => self.registers.write_word(inst.rd(), value),
-                    Err(MemoryError::CacheMiss { stall_cycles }) => {
+                    Err(MemoryError::CacheMiss { stall_cycles, retry }) => {
                         self.stall = stall_cycles - 1;
-                        return;  // don't increment PC
+                        if retry {
+                            return;  // don't increment PC
+                        }
                     },
                     Err(MemoryError::InvalidAddress) => {
                         self.trap(Trap::IllegalRead {
@@ -325,9 +327,11 @@ impl<'a> Core<'a> {
 
                 match result {
                     Ok(()) => (),
-                    Err(MemoryError::CacheMiss { stall_cycles }) => {
+                    Err(MemoryError::CacheMiss { stall_cycles, retry }) => {
                         self.stall = stall_cycles - 1;
-                        return;  // don't increment PC
+                        if retry {
+                            return;  // don't increment PC
+                        }
                     },
                     Err(MemoryError::InvalidAddress) => {
                         self.trap(Trap::IllegalWrite {

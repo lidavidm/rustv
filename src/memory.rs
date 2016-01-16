@@ -23,7 +23,10 @@ use isa::{self, Instruction, IsaType};
 pub enum MemoryError {
     InvalidAddress,
     CacheMiss {
+        /// How many cycles to stall
         stall_cycles: u32,
+        /// Whether the load or store should be retried
+        retry: bool,
     },
 }
 
@@ -334,7 +337,7 @@ impl<'a> MemoryInterface for DirectMappedCache<'a> {
                             fetch_request.data[offset as usize] = data;
                             fetch_request.waiting_on += 1;
                         },
-                        Err(MemoryError::CacheMiss { stall_cycles }) => {
+                        Err(MemoryError::CacheMiss { stall_cycles, .. }) => {
                             fetch_request.cycles_left = stall_cycles;
                             continue;
                         },
@@ -401,12 +404,14 @@ impl<'a> MemoryInterface for DirectMappedCache<'a> {
             fetch_request.error = None;
 
             return Err(MemoryError::CacheMiss {
-                stall_cycles: fetch_request.cycles_left
+                stall_cycles: fetch_request.cycles_left,
+                retry: true,
             });
         }
 
         Err(MemoryError::CacheMiss {
             stall_cycles: stall,
+            retry: true,
         })
     }
 

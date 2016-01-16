@@ -197,7 +197,7 @@ macro_rules! isa_utype {
 
                 let mut bytes = vec![];
                 for offset in 0..mem::size_of::<$utype>() {
-                    bytes.push(Byte(((self.0 >> (8 * offset)) & 0xFF) as u8));
+                    bytes.push(Byte((self.0 >> (8 * offset)) as u8));
                 }
 
                 bytes
