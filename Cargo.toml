@@ -1,6 +1,6 @@
 [package]
 name = "rustv"
-version = "0.5.0"
+version = "0.5.1"
 authors = ["David Li <li.davidm96@gmail.com>"]
 
 description = "A minimal, intentionally inaccurate RISC-V ISA simulator"
