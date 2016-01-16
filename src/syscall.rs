@@ -20,6 +20,10 @@ use trap;
 
 pub trait SyscallHandler {
     // Can't take cache because syscall can't stall
+    /// Implement the syscall requested by core_id.
     fn syscall(&mut self, core_id: usize,
                registers: &mut RegisterFile, mmu: &Mmu) -> Option<trap::Trap>;
+
+    /// Determine, after each cycle, whether the processor should halt.
+    fn should_halt(&self) -> bool;
 }

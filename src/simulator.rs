@@ -33,6 +33,16 @@ pub struct Core<'a> {
     stall_count: u32,
 }
 
+/// Why the simulator has halted execution.
+pub enum HaltReason {
+    /// All cores have halted execution.
+    CoresHalted,
+    /// The simulator has hit the cycle limit.
+    OutOfCycles,
+    /// The syscall handler has requested a halt.
+    SystemHalt,
+}
+
 pub struct Simulator<'a, T: SyscallHandler> {
     cores: Vec<Core<'a>>,
     memory: SharedMemory<'a>,
@@ -410,32 +420,33 @@ impl<'a, T: SyscallHandler> Simulator<'a, T> {
         ran
     }
 
-    fn report(&self) {
-        for core in self.cores.iter() {
-            println!("Core {}: stalled {} of {}",
-                     core.id, core.stall_count, core.cycle_count);
-        }
+    pub fn report(&self) -> Vec<(usize, u32, u32)> {
+        self.cores.iter()
+            .map(|core| (core.id, core.stall_count, core.cycle_count))
+            .collect()
     }
 
-    pub fn run(&mut self) {
+    pub fn run(&mut self) -> HaltReason {
         loop {
             if !self.step() {
-                break
+                return HaltReason::CoresHalted;
+            }
+            if self.syscall.should_halt() {
+                return HaltReason::SystemHalt;
             }
         }
-
-        println!("All cores are not running, stopping...");
-        self.report();
     }
 
-    pub fn run_max(&mut self, cycles: usize) {
+    pub fn run_max(&mut self, cycles: usize) -> HaltReason {
         for _ in 0..cycles {
             if !self.step() {
-                break
+                return HaltReason::CoresHalted;
+            }
+            if self.syscall.should_halt() {
+                return HaltReason::SystemHalt;
             }
         }
 
-        println!("Out of cycles, stopping...");
-        self.report();
+        return HaltReason::OutOfCycles;
     }
 }
