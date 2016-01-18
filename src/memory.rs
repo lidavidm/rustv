@@ -123,7 +123,23 @@ pub trait MemoryInterface {
     }
 }
 
+pub struct CacheMetadata {
+    /// How many sets are in the cache
+    pub num_sets: usize,
+    /// How many ways are in a set
+    pub num_ways: usize,
+    /// How many words are in a block/line
+    pub num_block_words: usize,
+    /// The tags currently in the cache, in order of set, then way
+    pub tags: Vec<Option<isa::Address>>,
+}
+
+pub trait CacheInterface : MemoryInterface {
+    fn cache_metadata(&self) -> CacheMetadata;
+}
+
 pub type SharedMemory<'a> = Rc<RefCell<MemoryInterface + 'a>>;
+pub type SharedCache<'a> = Rc<RefCell<CacheInterface + 'a>>;
 
 pub trait Mmu {
     fn translate(&self, address: isa::Address) -> isa::Address;
@@ -438,6 +454,32 @@ impl<'a> MemoryInterface for DirectMappedCache<'a> {
                 }
             },
             Err(e) => Err(e),
+        }
+    }
+}
+
+impl<'a> CacheInterface for DirectMappedCache<'a> {
+    fn cache_metadata(&self) -> CacheMetadata {
+        let tags = {
+            let mut tags = Vec::new();
+
+            for set in self.cache.iter() {
+                if set.valid {
+                    tags.push(Some(isa::Word(set.tag)));
+                }
+                else {
+                    tags.push(None);
+                }
+            }
+
+            tags
+        };
+
+        CacheMetadata {
+            num_sets: self.num_sets as usize,
+            num_ways: 1,
+            num_block_words: self.block_words as usize,
+            tags: tags,
         }
     }
 }

@@ -16,7 +16,7 @@
 
 use isa;
 use isa::IsaType;
-use memory::{MemoryInterface, MemoryError, Mmu, SharedMemory};
+use memory::{MemoryInterface, MemoryError, Mmu, SharedCache, SharedMemory};
 use register_file::RegisterFile;
 use syscall::SyscallHandler;
 use trap::Trap;
@@ -27,7 +27,7 @@ pub struct Core<'a> {
     registers: RegisterFile,
     stall: u32,
     running: bool,
-    cache: SharedMemory<'a>,
+    cache: SharedCache<'a>,
     mmu: Box<Mmu + 'a>,
     cycle_count: u32,
     stall_count: u32,
@@ -53,7 +53,7 @@ pub struct Simulator<'a, T: SyscallHandler> {
 impl<'a> Core<'a> {
     // TODO: take Rc<RefCell<>> to Memory as well?
     pub fn new(id: usize, entry: isa::Address, sp: isa::Address,
-               cache: SharedMemory<'a>, mmu: Box<Mmu + 'a>) -> Core<'a> {
+               cache: SharedCache<'a>, mmu: Box<Mmu + 'a>) -> Core<'a> {
         let mut registers = RegisterFile::new();
         registers.write_word(isa::Register::X2, sp);
         Core {
