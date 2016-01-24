@@ -14,9 +14,10 @@
 // You should have received a copy of the GNU General Public License
 // along with rustv.  If not, see <http://www.gnu.org/licenses/>.
 
+use cache::SharedCache;
 use isa;
 use isa::IsaType;
-use memory::{MemoryInterface, MemoryError, Mmu, SharedCache, SharedMemory};
+use memory::{MemoryInterface, MemoryError, Mmu, SharedMemory};
 use register_file::RegisterFile;
 use syscall::SyscallHandler;
 use trap::Trap;

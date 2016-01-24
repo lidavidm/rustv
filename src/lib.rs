@@ -18,6 +18,7 @@
            op_assign_traits, step_by)]
 extern crate elfloader32 as elfloader_lib;
 
+pub mod cache;
 pub mod isa;
 pub mod memory;
 pub mod register_file;
@@ -31,6 +32,7 @@ pub use elfloader_lib as elfloader;
 mod tests {
     #[test]
     fn cache_address_parsing() {
+        use cache::*;
         use isa::*;
         use memory::*;
         use std::rc::Rc;
@@ -38,8 +40,10 @@ mod tests {
 
         let memory = Memory::new(16);
         let memory_ref = Rc::new(RefCell::new(memory));
-        let dm_cache_word = DirectMappedCache::new(4, 1, memory_ref.clone());
-        let dm_cache_doubleword = DirectMappedCache::new(4, 2, memory_ref.clone());
+        let dm_cache_word = DirectMappedCache::new(
+            4, 1, memory_ref.clone(), EmptyCacheEventHandler {});
+        let dm_cache_doubleword = DirectMappedCache::new(
+            4, 2, memory_ref.clone(), EmptyCacheEventHandler {});
 
         assert_eq!(dm_cache_word.parse_address(Word(0xFFFFFFFD)),
                    (0xFFFFFFF, 3, 1));
@@ -52,6 +56,7 @@ mod tests {
         use std::rc::Rc;
         use std::cell::RefCell;
 
+        use cache::*;
         use isa::*;
         use memory::*;
 
@@ -104,7 +109,8 @@ mod tests {
         });
 
         let memory_ref = Rc::new(RefCell::new(memory));
-        let mut dm_cache = DirectMappedCache::new(4, 4, memory_ref.clone());
+        let mut dm_cache = DirectMappedCache::new(
+            4, 4, memory_ref.clone(), EmptyCacheEventHandler {});
 
         assert_eq!(dm_cache.read_word(Word(0x10)), stall);
 
