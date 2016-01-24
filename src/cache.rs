@@ -57,20 +57,20 @@ struct FetchRequest {
 }
 
 #[derive(Clone)]
-struct CacheBlock {
+struct Block {
     valid: bool,
     tag: u32,
     contents: Vec<isa::Word>,
     fetch_request: Option<FetchRequest>,
 }
 
-pub trait CacheEventHandler {
+pub trait EventHandler {
     fn block_fetched(&self, location: CacheLocation);
 }
 
-pub struct EmptyCacheEventHandler {}
+pub struct EmptyEventHandler {}
 
-impl CacheEventHandler for EmptyCacheEventHandler {
+impl EventHandler for EmptyEventHandler {
     fn block_fetched(&self, _: CacheLocation) {}
 }
 
@@ -78,19 +78,19 @@ impl CacheEventHandler for EmptyCacheEventHandler {
 // investigate how LRU is implemented
 // TODO: use hashtable for a way?
 // TODO: hashtable-based FA cache?
-pub struct DirectMappedCache<'a, T: CacheEventHandler> {
+pub struct DirectMappedCache<'a, T: EventHandler> {
     num_sets: u32,
     block_words: u32,
-    cache: Vec<CacheBlock>,
+    cache: Vec<Block>,
     next_level: SharedMemory<'a>,
     events: T,
 }
 
-impl<'a, T: CacheEventHandler> DirectMappedCache<'a, T> {
+impl<'a, T: EventHandler> DirectMappedCache<'a, T> {
     pub fn new(sets: u32, block_words: u32,
                next_level: SharedMemory<'a>, events: T)
                -> DirectMappedCache<'a, T> {
-        let set = CacheBlock {
+        let set = Block {
             valid: false,
             tag: 0,
             contents: vec![isa::Word(0); block_words as usize],
@@ -124,7 +124,7 @@ impl<'a, T: CacheEventHandler> DirectMappedCache<'a, T> {
     }
 }
 
-impl<'a, T: CacheEventHandler> MemoryInterface for DirectMappedCache<'a, T> {
+impl<'a, T: EventHandler> MemoryInterface for DirectMappedCache<'a, T> {
     fn latency(&self) -> u32 {
         0
     }
@@ -263,7 +263,7 @@ impl<'a, T: CacheEventHandler> MemoryInterface for DirectMappedCache<'a, T> {
     }
 }
 
-impl<'a, T: CacheEventHandler> CacheInterface for DirectMappedCache<'a, T> {
+impl<'a, T: EventHandler> CacheInterface for DirectMappedCache<'a, T> {
     fn cache_metadata(&self) -> CacheMetadata {
         let tags = {
             let mut tags = Vec::new();

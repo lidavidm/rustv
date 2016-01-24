@@ -41,9 +41,9 @@ mod tests {
         let memory = Memory::new(16);
         let memory_ref = Rc::new(RefCell::new(memory));
         let dm_cache_word = DirectMappedCache::new(
-            4, 1, memory_ref.clone(), EmptyCacheEventHandler {});
+            4, 1, memory_ref.clone(), EmptyEventHandler {});
         let dm_cache_doubleword = DirectMappedCache::new(
-            4, 2, memory_ref.clone(), EmptyCacheEventHandler {});
+            4, 2, memory_ref.clone(), EmptyEventHandler {});
 
         assert_eq!(dm_cache_word.parse_address(Word(0xFFFFFFFD)),
                    (0xFFFFFFF, 3, 1));
@@ -110,7 +110,7 @@ mod tests {
 
         let memory_ref = Rc::new(RefCell::new(memory));
         let mut dm_cache = DirectMappedCache::new(
-            4, 4, memory_ref.clone(), EmptyCacheEventHandler {});
+            4, 4, memory_ref.clone(), EmptyEventHandler {});
 
         assert_eq!(dm_cache.read_word(Word(0x10)), stall);
 
