@@ -126,6 +126,7 @@ pub trait MemoryInterface {
 
 pub type SharedMemory<'a> = Rc<RefCell<MemoryInterface + 'a>>;
 
+// TODO: rename to BijectiveMmu?
 pub trait Mmu {
     fn translate(&self, address: isa::Address) -> isa::Address;
 }

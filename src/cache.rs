@@ -65,6 +65,7 @@ struct Block {
 }
 
 pub trait EventHandler {
+    fn block_requested(&self, location: CacheLocation);
     fn block_fetched(&self, location: CacheLocation);
 }
 
@@ -72,6 +73,7 @@ pub struct EmptyEventHandler {}
 
 impl EventHandler for EmptyEventHandler {
     fn block_fetched(&self, _: CacheLocation) {}
+    fn block_requested(&self, _: CacheLocation) {}
 }
 
 // TODO: probably want different caches for different strategies, and
@@ -207,6 +209,7 @@ impl<'a, T: EventHandler> MemoryInterface for DirectMappedCache<'a, T> {
                 error: None,
                 waiting_on: 0,
             });
+            self.events.block_requested(location);
         }
         else if let Some(ref mut fetch_request) = set.fetch_request {
             if let Some(ref err) = fetch_request.error {
