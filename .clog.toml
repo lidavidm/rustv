@@ -1,0 +1,8 @@
+[clog]
+repository = "https://git.lidavidm.me/rustv"
+
+link-style = "cgit"
+
+changelog = "CHANGELOG.md"
+
+from-latest-tag = true
